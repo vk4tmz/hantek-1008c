@@ -284,6 +284,50 @@ aborting. This is intended for characterisation only; it is not yet a
 production acquisition implementation.
 
 
+
+## Confirmed stateful acquisition sequence
+
+A continuous single-process run of the complete known startup/configuration
+sequence followed by the documented waiting cycle produced:
+
+```text
+A4 01  -> A4
+C0     -> C0
+C2     -> C2
+A5 5A  -> A5 02
+A5 5A  -> A5 02
+C6 02  -> 0F A0
+```
+
+Before the waiting cycle, `C6 02` returned:
+
+```text
+00 00
+```
+
+After the waiting cycle it returned:
+
+```text
+0F A0
+```
+
+Interpreted as big-endian `0x0FA0`, this is 4000 bytes.
+
+This is strong evidence that:
+
+- the acquisition path is stateful;
+- the documented waiting sequence successfully makes capture data available;
+- `A5 5A -> A5 02` is likely a ready/buffer-state response;
+- `C6` returns a two-byte buffer size/state value in big-endian order.
+
+The project now includes `tools/capture_buffers.py`, which performs the full
+stateful sequence and then drains selectors `02` and `03` using repeated
+`A6 <selector>` requests, reading up to 64 bytes from bulk IN per request.
+
+Raw output is saved under `captures/` together with JSON metadata and a
+transaction log.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
