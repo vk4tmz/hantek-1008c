@@ -209,6 +209,51 @@ Do not bulk-run all four commands while the acquisition semantics are still
 being established.
 
 
+
+## Documented acquisition waiting cycle
+
+The published Hantek 1008C protocol notes give the following sequence before
+buffer-size / buffer-data reads:
+
+```text
+F3
+A2 01 01 01 01 01 01 01 01
+A4 01
+C0
+C2
+A5 5A
+A5 5A
+```
+
+This project has not yet independently established the semantics of all of
+these commands.
+
+`tools/probe_wait_cycle.py` exposes them individually:
+
+```text
+F3 -> F3
+A2 -> A2 01 01 01 01 01 01 01 01
+A4 -> A4 01
+C0 -> C0
+C2 -> C2
+A5 -> A5 5A
+```
+
+The recommended reverse-engineering sequence is:
+
+1. Send `F3`.
+2. Send `A2`.
+3. Query `C6 02` and record whether it remains zero.
+4. Send `A4`.
+5. Query `C6 02` again.
+6. Continue with `C0`, `C2`, and the two `A5 5A` writes, checking `C6 02`
+   between stages as useful.
+
+This staged approach is intentional: it can reveal which command actually arms
+or starts acquisition instead of treating the published sequence as a black
+box.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
