@@ -35,7 +35,7 @@ STARTUP_SEQUENCE = [
 
 WAIT_SEQUENCE = [
     ("F3", bytes.fromhex("F3")),
-    ("A2", bytes.fromhex("A2 01 01 01 01 01 01 01 01")),
+    ("A2", bytes.fromhex("A2 03 03 03 03 03 03 03 03")),
     ("A4", bytes.fromhex("A4 01")),
     ("C0", bytes.fromhex("C0")),
     ("C2", bytes.fromhex("C2")),

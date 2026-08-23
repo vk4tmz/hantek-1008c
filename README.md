@@ -142,3 +142,19 @@ Y axis: raw 12-bit ADC counts
 ```
 
 No volts-per-count or sample-period calibration is applied yet.
+
+
+### Known-signal validation range
+
+For the current 1 kHz / 2 Vpp built-in calibration test, the acquisition path
+now uses:
+
+```text
+A2 03 03 03 03 03 03 03 03
+```
+
+for all eight channels.
+
+This is an intentional single-variable change from the previous `A2 01 ...`
+setting. Buffer ordering, sample decoding, channel interleaving, and timebase
+configuration are unchanged so the next capture/plot is directly comparable.

@@ -480,3 +480,20 @@ Selectors 02 and 03 together therefore provide 500 samples per channel.
 
 `hantek1008c.decode` now provides reusable decoding, and
 `tools/plot_capture.py` exports CSV plus a PNG plot in raw ADC counts.
+
+
+## Vertical-range validation change
+
+The first plotted CH1 waveform did not resemble the expected 1 kHz calibration
+square wave even though the channel interleave was strongly confirmed.
+
+For the next validation capture, only the `A2` range setting is changed:
+
+```text
+previous: A2 01 01 01 01 01 01 01 01
+current : A2 03 03 03 03 03 03 03 03
+```
+
+The decoder, buffer concatenation order, and timebase remain unchanged. This
+keeps the experiment controlled and allows direct comparison of waveform shape
+under a different vertical range.
