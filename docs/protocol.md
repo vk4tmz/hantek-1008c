@@ -558,3 +558,30 @@ the drift disappears while the alternating transition structure is preserved.
 
 This remains experimental evidence and is not yet treated as the canonical
 waveform decode.
+
+
+## Balanced delta-zero reconstruction
+
+Thresholds 4, 6, and 8 produced the same reconstructed waveform, proving the
+plateau drift was not caused by low-level residual noise surviving the
+threshold. The remaining staircase drift is consistent with a small bias in
+the selected delta-zero.
+
+The experimental decoder now supports `balanced` zero estimation. Consecutive
+opposite-sign transition groups are paired, and for each pair the zero that
+makes the selected transition deltas sum to zero is calculated. The median
+pair-zero is then used for reconstruction.
+
+This should cause a complete up/down cycle to return to the same integrated
+baseline without altering individual transition magnitudes.
+
+## Provisional source-derived calibration
+
+Once reconstruction is stable, the known built-in source can provide empirical
+calibration:
+
+- 1 kHz frequency establishes samples/cycle and sample rate;
+- 2 Vpp amplitude establishes provisional volts per reconstructed count.
+
+These values remain provisional until the device's factory calibration blocks
+are decoded and applied.

@@ -279,3 +279,35 @@ done
 ```
 
 This is still a hypothesis test; it does not alter the confirmed raw decoder.
+
+
+### Balanced delta-zero and provisional calibration
+
+The experimental reconstruction now supports three zero modes:
+
+```text
+quiet     estimate zero from quiet/raw baseline samples
+balanced  estimate zero so alternating transition pairs sum to zero
+manual    use an explicitly supplied raw-code zero
+```
+
+`balanced` is the default experimental mode.
+
+Example with the known built-in 1 kHz / 2 Vpp source:
+
+```bash
+python tools/reconstruct_delta.py \
+  captures/20260823T072831Z_ch2-range-01_capture.json \
+  --channel 2 \
+  --threshold 6 \
+  --zero-mode balanced
+```
+
+The tool now also reports provisional calibration values from the known source:
+
+- edge spacing -> samples/cycle -> sample rate / sample period;
+- reconstructed plateau separation -> provisional volts per reconstructed count.
+
+These calibration values are **not final**. They are intended as empirical
+reference measurements until the startup factory calibration blocks (`B5`,
+`B6`, `F7`, `F8`, `FA`, etc.) are decoded and reconciled.
