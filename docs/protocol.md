@@ -78,6 +78,34 @@ Use `tools/decode_reply.py` to inspect captures in raw, `uint16`, and `int16`
 forms.
 
 
+
+## Confirmed parameterised startup acknowledgements
+
+The following parameterised writes have now been confirmed directly on the
+development unit:
+
+```text
+B9 01 BF 04 00 00 -> B9
+B7 00             -> B7
+BB 08 00          -> BB
+```
+
+These commands are acknowledged by returning only the opcode byte, rather than
+echoing the full request payload.
+
+The next documented configuration writes to test are:
+
+```text
+A0 08
+AA 01 01 01 01 01 01 01 01
+```
+
+Existing protocol notes identify these respectively as the enabled-channel
+count and the per-channel enable state. They are now available through
+`tools/probe_startup.py`, but remain unverified on this project's hardware
+until explicitly run.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
