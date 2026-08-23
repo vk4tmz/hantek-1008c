@@ -508,3 +508,16 @@ ranges, A4, AC, command delay, and USB timeout.
 
 The resolved values are embedded in every capture metadata JSON. This allows
 controlled one-variable-at-a-time experiments without losing provenance.
+
+
+## Periodicity analysis
+
+The capture analyser now measures periodic structure directly instead of
+relying on visual inspection of PNG plots. For each decoded channel it reports
+dominant autocorrelation lag and robustly detected excursion/event spacing.
+
+This is intended to quantify the calibration signal while time calibration is
+still unknown. If a known 1 kHz source repeats every N samples, the implied
+per-channel sample rate is approximately `N * 1000 samples/s`, subject to
+confirmation that the detected events represent one event per calibrator
+cycle.

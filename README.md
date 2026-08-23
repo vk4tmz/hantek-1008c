@@ -187,3 +187,29 @@ python tools/capture_buffers.py --ac "01 F4 00 09 C5 00 09 C5" --tag ac-test
 
 Every capture metadata JSON records the fully resolved settings, making
 experiments reproducible and easy to compare.
+
+
+### Periodicity and sweep comparison
+
+`analyze_capture.py` now reports per-channel:
+
+- AC span and RMS;
+- dominant autocorrelation period in samples;
+- correlation strength;
+- detected excursion/event indices;
+- spacing between detected events.
+
+For a group of experimental captures, use:
+
+```bash
+python tools/compare_captures.py \
+  captures/*_a3-10_capture.json \
+  captures/*_a3-11_capture.json \
+  captures/*_a3-12_capture.json
+```
+
+The comparison automatically identifies the channel with the largest AC
+activity and prints the resolved A3 value, dominant period, and event spacing.
+
+`capture_buffers.py` also repeats the resolved A3/A2/A4 settings at the end of
+each capture, which makes back-to-back sweep output easier to read.

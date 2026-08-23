@@ -7,6 +7,12 @@ from pathlib import Path
 import statistics
 import struct
 
+from pathlib import Path as _PathForImport
+import sys
+sys.path.insert(0, str(_PathForImport(__file__).resolve().parents[1]))
+from hantek1008c.analysis import analyze_periodicity
+from hantek1008c.decode import decode_buffers
+
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -168,6 +174,28 @@ def main():
     print("Combined 8-way u12(low12) lane statistics:")
     for ch in range(8):
         print_stats(f"lane {ch+1}", le12[ch::8])
+
+    decoded = decode_buffers(b2, b3)
+    print()
+    print("=== Per-channel periodicity ===")
+    for ch_index, samples in enumerate(decoded.channels, start=1):
+        result = analyze_periodicity(samples)
+        period = (
+            str(result.dominant_period_samples)
+            if result.dominant_period_samples is not None else "-"
+        )
+        corr = (
+            f"{result.dominant_corr:.3f}"
+            if result.dominant_corr is not None else "-"
+        )
+        events = ",".join(str(i) for i in result.event_indices[:12]) or "-"
+        spacings = ",".join(str(i) for i in result.event_spacings[:12]) or "-"
+        print(
+            f"CH{ch_index}: span={result.span:4d} "
+            f"rms_ac={result.rms_ac:7.3f} "
+            f"period={period:>4s} samples corr={corr:>6s} "
+            f"events=[{events}] spacings=[{spacings}]"
+        )
 
     return 0
 

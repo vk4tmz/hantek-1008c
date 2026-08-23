@@ -194,6 +194,13 @@ def main():
     meta.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print("\nCapture complete.")
     print(f"Metadata : {meta}")
+    print(
+        "Resolved: "
+        f"A3={s['a3']:02X} "
+        f"A2={'/'.join(f'{x:02X}' for x in s['ranges'])} "
+        f"A4={s['a4']:02X} "
+        f"tag={args.tag or '-'}"
+    )
     return 0
 
 
