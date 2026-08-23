@@ -521,3 +521,25 @@ still unknown. If a known 1 kHz source repeats every N samples, the implied
 per-channel sample rate is approximately `N * 1000 samples/s`, subject to
 confirmation that the detected events represent one event per calibrator
 cycle.
+
+
+## Experimental delta-coded acquisition hypothesis
+
+With the 1 kHz / 2 Vpp calibration output connected to CH2 at range `01`, the
+raw channel contains alternating positive and negative narrow excursions at
+50-sample spacing. This resembles transition/delta information more than an
+absolute square-wave level.
+
+A separate experimental tool, `tools/reconstruct_delta.py`, now tests this by
+estimating the quiet raw-code baseline and cumulatively integrating deviations
+from that baseline.
+
+This hypothesis is **not yet promoted to protocol fact**. The established facts
+remain:
+
+- 16-bit little-endian transport words;
+- low 12 bits contain the channel value;
+- CH1..CH8 are interleaved;
+- selectors 02 then 03 form a continuous 500-sample/channel acquisition;
+- A2 independently controls per-channel vertical gain/range;
+- A3 changes periodic sample spacing/timebase behaviour.

@@ -213,3 +213,35 @@ activity and prints the resolved A3 value, dominant period, and event spacing.
 
 `capture_buffers.py` also repeats the resolved A3/A2/A4 settings at the end of
 each capture, which makes back-to-back sweep output easier to read.
+
+
+### Experimental delta reconstruction
+
+The driven calibration channel currently appears as alternating positive and
+negative narrow excursions rather than an absolute square-wave level. To test
+whether the acquisition payload may represent changes/deltas, use:
+
+```bash
+python tools/reconstruct_delta.py captures/<capture>_capture.json
+```
+
+The tool:
+
+1. automatically selects the channel with the largest AC activity unless
+   `--channel N` is supplied;
+2. estimates the raw code corresponding to "no change" from quiet samples;
+3. subtracts that delta-zero;
+4. cumulatively integrates the residual values;
+5. writes a reconstruction CSV;
+6. writes separate raw and reconstructed PNG plots.
+
+Example:
+
+```bash
+python tools/reconstruct_delta.py \
+  captures/20260823T072831Z_ch2-range-01_capture.json \
+  --channel 2
+```
+
+This is explicitly an **experimental hypothesis test**. The confirmed raw
+decoder remains unchanged until the representation is proven.
