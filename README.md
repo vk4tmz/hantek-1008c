@@ -85,3 +85,20 @@ The scope returns acquisition data in fixed 64-byte `A6` packets. For a
 reported 4000-byte logical buffer the reader fetches 63 packets (4032 raw
 bytes) and trims the result to 4000 bytes. This avoids libusb `EOVERFLOW` on
 the final partial logical packet.
+
+
+### Analyse the latest raw capture
+
+After a successful `capture_buffers.py` run:
+
+```bash
+python tools/analyze_capture.py
+```
+
+The analyser automatically selects the newest `captures/*_capture.json` and
+prints candidate byte/word interpretations plus 8-way lane statistics.
+
+With CH1 connected to the built-in 1 kHz / 2 Vpp test output, look for one
+candidate layout where lane/channel 1 has a clearly larger AC span/RMS than the
+other seven lanes. That is our first strong clue to the actual sample format
+and channel interleaving.

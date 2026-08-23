@@ -417,3 +417,31 @@ For a 4000-byte logical buffer this means 63 packets (4032 raw bytes), with the
 final 32 bytes discarded beyond the reported logical size.
 
 This matches the independent `hantek1008py` implementation.
+
+
+## First complete raw acquisition
+
+A full stateful acquisition has now successfully returned:
+
+```text
+C6 02 -> 0F A0 -> 4000 logical bytes
+C6 03 -> 0F A0 -> 4000 logical bytes
+```
+
+Each selector required 63 fixed 64-byte `A6` packets (4032 transport bytes),
+trimmed to the reported 4000-byte logical length.
+
+This gives 8000 logical bytes across selectors 02 and 03.
+
+Before assigning sample format or voltage scaling, use
+`tools/analyze_capture.py` to compare candidate interpretations:
+
+- raw unsigned bytes;
+- little- and big-endian 16-bit words;
+- signed little-endian 16-bit words;
+- low 12 bits of little-endian words;
+- 8-way byte and word interleaving.
+
+A known CH1 1 kHz / 2 Vpp stimulus is especially useful because the correct
+layout should make one channel/lane show substantially more AC activity than
+the other seven.
