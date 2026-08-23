@@ -601,3 +601,15 @@ quantized, or non-sinusoidal encoded data.
 `tools/analyze_tone.py` therefore evaluates the expected physical period and
 its harmonics explicitly. Future timebase conclusions should use those
 frequency-aware results rather than the single generic maximum alone.
+
+
+## Focused raw-channel waveform plotting
+
+The plotter now supports single-channel selection, mean centering, and a
+user-supplied per-channel sample rate. This permits direct visual validation
+of the raw CH2 sine capture without the DC offsets of the other seven channels
+compressing the display.
+
+For the clean 4 kHz CH2 capture and a 100 ksample/s/channel candidate rate, the
+500-sample record should span approximately 5 ms and therefore contain about
+20 cycles.

@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import statistics
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,6 +28,22 @@ def parse_args():
         "--png",
         help="PNG output path; default derived from capture timestamp",
     )
+    p.add_argument(
+        "--channel",
+        type=int,
+        choices=range(1, 9),
+        help="plot only one channel (1..8); default: all channels",
+    )
+    p.add_argument(
+        "--center",
+        action="store_true",
+        help="subtract selected channel mean before plotting",
+    )
+    p.add_argument(
+        "--sample-rate",
+        type=float,
+        help="per-channel sample rate in samples/s; use time axis when supplied",
+    )
     return p.parse_args()
 
 
@@ -49,6 +66,10 @@ def resolve(meta_path: Path, stored: str) -> Path:
 
 def main():
     args = parse_args()
+
+    if args.sample_rate is not None and args.sample_rate <= 0:
+        raise SystemExit("ERROR: --sample-rate must be > 0")
+
     meta_path = Path(args.capture_json) if args.capture_json else newest_capture()
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
@@ -58,10 +79,24 @@ def main():
     decoded = decode_buffers(p2.read_bytes(), p3.read_bytes())
 
     stem = meta_path.name.replace("_capture.json", "")
-    csv_path = Path(args.csv) if args.csv else meta_path.parent / f"{stem}_decoded.csv"
-    png_path = Path(args.png) if args.png else meta_path.parent / f"{stem}_channels.png"
 
-    decoded.write_csv(csv_path)
+    if args.channel:
+        suffix = f"_ch{args.channel}"
+        if args.center:
+            suffix += "_centered"
+    else:
+        suffix = "_channels"
+
+    csv_path = (
+        Path(args.csv)
+        if args.csv
+        else meta_path.parent / f"{stem}{suffix}.csv"
+    )
+    png_path = (
+        Path(args.png)
+        if args.png
+        else meta_path.parent / f"{stem}{suffix}.png"
+    )
 
     try:
         import matplotlib.pyplot as plt
@@ -70,6 +105,63 @@ def main():
         print("Install it with: pip install matplotlib", file=sys.stderr)
         return 3
 
+    if args.channel:
+        ch_index = args.channel - 1
+        samples = list(decoded.channels[ch_index])
+        mean = statistics.fmean(samples)
+        values = [x - mean for x in samples] if args.center else samples
+
+        if args.sample_rate:
+            x = [i / args.sample_rate * 1000.0 for i in range(len(values))]
+            x_label = "Time (ms)"
+        else:
+            x = list(range(len(values)))
+            x_label = "Sample index"
+
+        # Write a focused CSV for the selected channel.
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        with csv_path.open("w", encoding="utf-8") as fh:
+            fh.write("sample_index,time_ms,raw_adc,plotted_value\n")
+            for i, (raw, plotted) in enumerate(zip(samples, values)):
+                time_ms = (
+                    i / args.sample_rate * 1000.0
+                    if args.sample_rate
+                    else ""
+                )
+                fh.write(f"{i},{time_ms},{raw},{plotted}\n")
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.plot(x, values)
+        ax.set_title(
+            f"Hantek 1008C CH{args.channel} "
+            + ("Centered Raw Capture" if args.center else "Raw Capture")
+        )
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(
+            "ADC counts relative to mean"
+            if args.center
+            else "ADC counts (12-bit raw)"
+        )
+        fig.tight_layout()
+        fig.savefig(png_path, dpi=150)
+        plt.close(fig)
+
+        print(f"Decoded channels       : 8")
+        print(f"Selected channel       : CH{args.channel}")
+        print(f"Samples                : {len(samples)}")
+        print(f"Channel mean           : {mean:.6f} ADC counts")
+        if args.sample_rate:
+            duration_ms = (len(samples) - 1) / args.sample_rate * 1000.0
+            print(f"Sample rate            : {args.sample_rate:.3f} samples/s/channel")
+            print(f"Sample period          : {1e6/args.sample_rate:.6f} us")
+            print(f"Displayed duration     : {duration_ms:.6f} ms")
+        print(f"Centered               : {'yes' if args.center else 'no'}")
+        print(f"CSV                    : {csv_path}")
+        print(f"PNG                    : {png_path}")
+        return 0
+
+    # Existing all-channel behavior.
+    decoded.write_csv(csv_path)
     x = list(range(decoded.samples_per_channel))
 
     fig, ax = plt.subplots(figsize=(12, 8))

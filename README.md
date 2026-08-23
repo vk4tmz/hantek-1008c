@@ -338,3 +338,31 @@ The tool reports:
 This is important because a harmonic (for example 2x the true period) can have
 a stronger correlation than the physical fundamental in short, quantized
 captures.
+
+
+### Focused single-channel plotting
+
+`plot_capture.py` now supports selecting one channel and plotting it on a
+calibrated time axis:
+
+```bash
+python tools/plot_capture.py \
+  captures/20260823T085519Z_sine-4khz-clean_capture.json \
+  --channel 2 \
+  --center \
+  --sample-rate 100000
+```
+
+Options:
+
+```text
+--channel N      plot only CH1..CH8
+--center         subtract the selected channel mean
+--sample-rate R  use milliseconds on the X axis from a per-channel sample rate
+```
+
+The default all-channel plotting behavior is unchanged.
+
+For the current 4 kHz validation capture at a candidate 100 ksample/s/channel,
+500 samples span about 5 ms, so approximately 20 waveform cycles should be
+visible if the raw CH2 lane directly represents the sine waveform.
