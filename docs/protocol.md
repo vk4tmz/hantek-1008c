@@ -254,6 +254,36 @@ or starts acquisition instead of treating the published sequence as a black
 box.
 
 
+
+## Stateful acquisition-sequence requirement
+
+An isolated probe of:
+
+```text
+A4 01
+```
+
+produced a USB PIPE/STALL on the attempted IN reply. A subsequent isolated
+`C6 02` also failed with a PIPE error.
+
+This is evidence that the acquisition path is stateful and that `A4` should
+not be treated as an ordinary independent write/ACK transaction.
+
+The project therefore now includes:
+
+```text
+tools/run_acquisition_sequence.py
+```
+
+which keeps the USB interface claimed for the complete startup/configuration
+and waiting-cycle sequence.
+
+The runner deliberately treats an `A4` PIPE/STALL as protocol evidence,
+attempts to clear endpoint halts, and continues rather than immediately
+aborting. This is intended for characterisation only; it is not yet a
+production acquisition implementation.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
