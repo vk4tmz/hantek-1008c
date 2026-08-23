@@ -311,3 +311,30 @@ The tool now also reports provisional calibration values from the known source:
 These calibration values are **not final**. They are intended as empirical
 reference measurements until the startup factory calibration blocks (`B5`,
 `B6`, `F7`, `F8`, `FA`, etc.) are decoded and reconciled.
+
+
+### Known-tone timebase validation
+
+For controlled sine-wave tests, use `tools/analyze_tone.py` rather than relying
+only on the generic single "best period" autocorrelation value.
+
+Example for a 4 kHz source with a 100 ksample/s/channel candidate rate:
+
+```bash
+python tools/analyze_tone.py \
+  captures/20260823T085519Z_sine-4khz-clean_capture.json \
+  --frequency-hz 4000 \
+  --candidate-rate 100000 \
+  --channel 2
+```
+
+The tool reports:
+
+- correlation near the expected fundamental period;
+- correlations at integer multiples of that period;
+- half-period / edge-related lags;
+- the strongest autocorrelation lags overall.
+
+This is important because a harmonic (for example 2x the true period) can have
+a stronger correlation than the physical fundamental in short, quantized
+captures.

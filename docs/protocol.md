@@ -585,3 +585,19 @@ calibration:
 
 These values remain provisional until the device's factory calibration blocks
 are decoded and applied.
+
+
+## Tone-specific autocorrelation validation
+
+A clean 4 kHz CH2 capture at `A3=11` produced strong periodic structure
+(span 11 counts, RMS AC ~3.06, generic autocorrelation ~0.943), but the generic
+analyser selected lag 50 rather than the 25-sample period predicted by a
+100 ksample/s/channel model.
+
+This does not by itself invalidate the 100 ksample/s model: autocorrelation can
+prefer an integer multiple of the true period, especially for short,
+quantized, or non-sinusoidal encoded data.
+
+`tools/analyze_tone.py` therefore evaluates the expected physical period and
+its harmonics explicitly. Future timebase conclusions should use those
+frequency-aware results rather than the single generic maximum alone.
