@@ -397,3 +397,23 @@ Change one vendor-software UI variable at a time and diff USB traffic: channel, 
 4. Decode `C6` / `A6` acquisition framing.
 5. Determine sample ordering across 8 channels.
 6. Determine ADC-code-to-voltage scaling.
+
+
+## Fixed-size A6 packet behaviour
+
+The first full buffer-read attempt reached 3968 of 4000 logical bytes and then
+failed with libusb `EOVERFLOW` when the host requested only the remaining
+32 bytes.
+
+`A6` transfers should therefore be treated as fixed-size 64-byte packets. The
+buffer reader now:
+
+1. reads `ceil(reported_size / 64)` packets;
+2. requests 64 bytes for every `A6` transfer;
+3. concatenates all raw packets;
+4. trims the result to the logical size reported by `C6`.
+
+For a 4000-byte logical buffer this means 63 packets (4032 raw bytes), with the
+final 32 bytes discarded beyond the reported logical size.
+
+This matches the independent `hantek1008py` implementation.

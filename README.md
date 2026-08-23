@@ -77,3 +77,11 @@ Transactions are logged as JSONL under `captures/`.
 7. Evaluate a native libsigrok driver for PulseView.
 
 See `docs/protocol.md`.
+
+
+### A6 fixed-packet note
+
+The scope returns acquisition data in fixed 64-byte `A6` packets. For a
+reported 4000-byte logical buffer the reader fetches 63 packets (4032 raw
+bytes) and trims the result to 4000 bytes. This avoids libusb `EOVERFLOW` on
+the final partial logical packet.

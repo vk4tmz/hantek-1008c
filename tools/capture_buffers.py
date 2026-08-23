@@ -71,16 +71,20 @@ def read_buffer(scope, selector, expected_size):
     payload = bytes([0xA6, selector])
     collected = bytearray()
 
-    print(f"Reading buffer selector {selector:02X}; target={expected_size} byte(s)")
+    # A6 returns fixed 64-byte packets. For logical sizes not divisible by 64,
+    # request ceil(size/64) full packets and trim the concatenated result.
+    packet_count = (expected_size + 63) // 64
 
-    while len(collected) < expected_size:
+    print(
+        f"Reading buffer selector {selector:02X}; "
+        f"target={expected_size} byte(s), packets={packet_count}"
+    )
+
+    for packet_index in range(packet_count):
         scope.write(payload, timeout_ms=1000)
 
-        remaining = expected_size - len(collected)
-        request_size = min(64, remaining)
-
         try:
-            chunk = scope.read(size=request_size, timeout_ms=1000)
+            chunk = scope.read(size=64, timeout_ms=1000)
         except Exception as exc:
             raise HantekUSBError(
                 f"A6 {selector:02X}: read failed after {len(collected)} byte(s): {exc}"
@@ -91,13 +95,27 @@ def read_buffer(scope, selector, expected_size):
                 f"A6 {selector:02X}: zero-length packet after {len(collected)} byte(s)"
             )
 
+        if len(chunk) != 64:
+            raise HantekUSBError(
+                f"A6 {selector:02X}: expected 64-byte packet, got {len(chunk)}"
+            )
+
         collected.extend(chunk)
         print(
-            f"A6_{selector:02X}: +{len(chunk):2d} byte(s) "
-            f"({len(collected)}/{expected_size})"
+            f"A6_{selector:02X}: packet {packet_index + 1}/{packet_count}, "
+            f"+{len(chunk)} byte(s) (raw={len(collected)})"
         )
 
-    return bytes(collected)
+    raw_length = len(collected)
+    trimmed = bytes(collected[:expected_size])
+    discarded = raw_length - expected_size
+
+    print(
+        f"A6_{selector:02X}: raw={raw_length} byte(s), "
+        f"logical={len(trimmed)} byte(s), discarded_tail={discarded}"
+    )
+
+    return trimmed
 
 
 def main():
