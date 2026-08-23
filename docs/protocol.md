@@ -497,3 +497,14 @@ current : A2 03 03 03 03 03 03 03 03
 The decoder, buffer concatenation order, and timebase remain unchanged. This
 keeps the experiment controlled and allows direct comparison of waveform shape
 under a different vertical range.
+
+
+## Parameterized reverse-engineering captures
+
+To reduce edit/test iterations, experimentally interesting acquisition fields
+are now configurable. `config/default.toml` is the canonical known-working
+baseline, while CLI options provide temporary overrides for A3, A2 channel
+ranges, A4, AC, command delay, and USB timeout.
+
+The resolved values are embedded in every capture metadata JSON. This allows
+controlled one-variable-at-a-time experiments without losing provenance.

@@ -158,3 +158,32 @@ for all eight channels.
 This is an intentional single-variable change from the previous `A2 01 ...`
 setting. Buffer ordering, sample decoding, channel interleaving, and timebase
 configuration are unchanged so the next capture/plot is directly comparable.
+
+
+### Configurable acquisition experiments
+
+Capture defaults now live in `config/default.toml`. Experimental values can be
+overridden from the command line without editing source code.
+
+Examples:
+
+```bash
+# Show the effective configuration without touching the scope
+python tools/capture_buffers.py --dry-run
+
+# Change only A3 and label the capture
+python tools/capture_buffers.py --a3 10 --tag a3-10
+
+# Change all channel ranges
+python tools/capture_buffers.py --range 03 --tag range-03
+
+# Override one channel only
+python tools/capture_buffers.py --ch2-range 01 --tag ch2-range-01
+
+# Override A4 or the AC payload
+python tools/capture_buffers.py --a4 01 --tag a4-01
+python tools/capture_buffers.py --ac "01 F4 00 09 C5 00 09 C5" --tag ac-test
+```
+
+Every capture metadata JSON records the fully resolved settings, making
+experiments reproducible and easy to compare.
