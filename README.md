@@ -102,3 +102,43 @@ With CH1 connected to the built-in 1 kHz / 2 Vpp test output, look for one
 candidate layout where lane/channel 1 has a clearly larger AC span/RMS than the
 other seven lanes. That is our first strong clue to the actual sample format
 and channel interleaving.
+
+
+### Decode, export, and plot a capture
+
+Install the plotting dependency after syncing this update:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then:
+
+```bash
+python tools/plot_capture.py
+```
+
+The tool selects the newest `captures/*_capture.json`, decodes the confirmed
+layout, writes a CSV, and saves a PNG plot.
+
+Confirmed raw layout:
+
+```text
+buffer02 + buffer03
+-> uint16 little-endian transport words
+-> low 12 bits are ADC counts
+-> CH1, CH2, CH3, CH4, CH5, CH6, CH7, CH8 interleaved
+-> repeat
+```
+
+For the current 4000-byte + 4000-byte capture, this yields 500 samples per
+channel.
+
+The plot intentionally uses:
+
+```text
+X axis: sample index
+Y axis: raw 12-bit ADC counts
+```
+
+No volts-per-count or sample-period calibration is applied yet.

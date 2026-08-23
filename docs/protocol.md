@@ -445,3 +445,38 @@ Before assigning sample format or voltage scaling, use
 A known CH1 1 kHz / 2 Vpp stimulus is especially useful because the correct
 layout should make one channel/lane show substantially more AC activity than
 the other seven.
+
+
+## Confirmed acquisition sample layout
+
+Structural analysis of a capture taken with CH1 connected to the scope's
+built-in 1 kHz / 2 Vpp test output strongly confirms the acquisition layout:
+
+```text
+16-bit little-endian transport words
+12-bit ADC value = word & 0x0FFF
+8-channel interleave:
+CH1 CH2 CH3 CH4 CH5 CH6 CH7 CH8
+repeat
+```
+
+Evidence from the combined 8000-byte capture:
+
+```text
+lane 1 span 126 counts, AC RMS ~8.9 counts
+lanes 2-8 spans only 4-6 counts, AC RMS ~0.6-0.8 counts
+```
+
+Only CH1 was driven, making the channel-lane correspondence unambiguous.
+
+Each 4000-byte buffer contains:
+
+```text
+4000 / 2 = 2000 ADC words
+2000 / 8 = 250 samples per channel
+```
+
+Selectors 02 and 03 together therefore provide 500 samples per channel.
+
+`hantek1008c.decode` now provides reusable decoding, and
+`tools/plot_capture.py` exports CSV plus a PNG plot in raw ADC counts.
