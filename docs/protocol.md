@@ -137,6 +137,78 @@ AC 01 F4 00 09 C5 00 09 C5
 Their exact semantics on this hardware remain unverified until explicitly run.
 
 
+
+## Confirmed startup/configuration command map
+
+The following startup/configuration transactions have now been confirmed on the
+development unit:
+
+```text
+B9 01 BF 04 00 00             -> B9
+B7 00                         -> B7
+BB 08 00                      -> BB
+A0 08                         -> A0
+AA 01 01 01 01 01 01 01 01 -> AA
+A3 11                         -> A3
+C1 00 00                      -> C1
+A7 00 00                      -> A7 00
+AC 01 F4 00 09 C5 00 09 C5  -> AC
+```
+
+Most parameterised startup/configuration writes return an opcode-only ACK.
+
+`A7` is currently the only confirmed exception in this sequence:
+
+```text
+A7 00 00 -> A7 00
+```
+
+The second response byte is therefore significant enough to preserve as
+protocol evidence. Its semantics remain unknown.
+
+This marks the current boundary between startup/configuration archaeology and
+acquisition-path archaeology.
+
+## Acquisition-path probes
+
+Existing reverse-engineering notes describe two acquisition-buffer selectors:
+
+```text
+C6 02
+A6 02
+
+C6 03
+A6 03
+```
+
+Working interpretation from prior notes:
+
+- `C6` queries acquisition-buffer state/size.
+- `A6` reads acquisition-buffer data.
+- selector `02` and selector `03` refer to the two acquisition buffers.
+
+These meanings are **not yet independently verified by this project**.
+
+`tools/probe_acquisition.py` exposes only the exact documented commands:
+
+```text
+C6_02 -> C6 02
+A6_02 -> A6 02
+C6_03 -> C6 03
+A6_03 -> A6 03
+```
+
+The intended test order is deliberately conservative:
+
+1. `C6_02`
+2. inspect/log response
+3. only then consider `A6_02`
+4. repeat later for selector `03`
+
+Do not bulk-run all four commands while the acquisition semantics are still
+being established.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
