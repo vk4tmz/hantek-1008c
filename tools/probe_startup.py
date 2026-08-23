@@ -16,6 +16,10 @@ KNOWN_STARTUP = {
     "BB": bytes.fromhex("BB 08 00"),
     "A0": bytes.fromhex("A0 08"),
     "AA": bytes.fromhex("AA 01 01 01 01 01 01 01 01"),
+    "A3": bytes.fromhex("A3 11"),
+    "C1": bytes.fromhex("C1 00 00"),
+    "A7": bytes.fromhex("A7 00 00"),
+    "AC": bytes.fromhex("AC 01 F4 00 09 C5 00 09 C5"),
 }
 
 

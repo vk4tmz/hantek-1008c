@@ -106,6 +106,37 @@ count and the per-channel enable state. They are now available through
 until explicitly run.
 
 
+
+## Confirmed channel-configuration acknowledgements
+
+The following channel-configuration writes have now been confirmed directly on
+the development unit:
+
+```text
+A0 08                         -> A0
+AA 01 01 01 01 01 01 01 01 -> AA
+```
+
+Both are acknowledged by returning only the opcode byte.
+
+Existing reverse-engineering notes identify:
+
+- `A0` as the enabled-channel count.
+- `AA` as the per-channel enable state.
+
+The next documented startup/configuration writes are available through
+`tools/probe_startup.py` for one-at-a-time testing:
+
+```text
+A3 11
+C1 00 00
+A7 00 00
+AC 01 F4 00 09 C5 00 09 C5
+```
+
+Their exact semantics on this hardware remain unverified until explicitly run.
+
+
 ## Existing reverse-engineering leads
 
 Reported elsewhere, not yet independently verified by this project:
