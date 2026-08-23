@@ -543,3 +543,18 @@ remain:
 - selectors 02 then 03 form a continuous 500-sample/channel acquisition;
 - A2 independently controls per-channel vertical gain/range;
 - A3 changes periodic sample spacing/timebase behaviour.
+
+
+## Thresholded delta-reconstruction test
+
+The first unfiltered cumulative reconstruction produced a recognizable square
+wave but showed plateau drift. This is consistent with integrating small
+baseline/noise residuals between the large alternating transition events.
+
+The experimental reconstruction tool now supports a configurable threshold so
+only significant deviations from the estimated quiet raw-code level are
+integrated. Comparing thresholds 4, 6, and 8 counts should establish whether
+the drift disappears while the alternating transition structure is preserved.
+
+This remains experimental evidence and is not yet treated as the canonical
+waveform decode.

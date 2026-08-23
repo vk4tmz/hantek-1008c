@@ -245,3 +245,37 @@ python tools/reconstruct_delta.py \
 
 This is explicitly an **experimental hypothesis test**. The confirmed raw
 decoder remains unchanged until the representation is proven.
+
+
+### Thresholded delta reconstruction
+
+The experimental delta reconstruction now supports an explicit noise threshold:
+
+```bash
+python tools/reconstruct_delta.py \
+  captures/20260823T072831Z_ch2-range-01_capture.json \
+  --channel 2 \
+  --threshold 6
+```
+
+It writes three separate plots:
+
+- raw acquisition;
+- unfiltered cumulative reconstruction;
+- thresholded cumulative reconstruction.
+
+The thresholded path integrates only deltas whose absolute distance from the
+estimated quiet raw-code level is at least the selected threshold.
+
+Useful comparison sweep:
+
+```bash
+for t in 4 6 8; do
+  python tools/reconstruct_delta.py \
+    captures/20260823T072831Z_ch2-range-01_capture.json \
+    --channel 2 \
+    --threshold "$t"
+done
+```
+
+This is still a hypothesis test; it does not alter the confirmed raw decoder.
