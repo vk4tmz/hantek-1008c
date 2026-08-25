@@ -52,23 +52,27 @@ def main():
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     p2 = resolve(meta_path, meta["buffer02"]["file"])
     p3 = resolve(meta_path, meta["buffer03"]["file"])
-    decoded = decode_buffers(p2.read_bytes(), p3.read_bytes())
+    active_channels = meta.get("resolved_configuration", {}).get("active_channels", list(range(1, 9)))
+    decoded = decode_buffers(p2.read_bytes(), p3.read_bytes(), active_channels=active_channels)
 
     results = [analyze_periodicity(ch) for ch in decoded.channels]
 
     if args.channel:
-        ch_index = args.channel - 1
+        if args.channel not in decoded.channel_ids:
+            raise SystemExit(f"ERROR: CH{args.channel} was not active in this capture; active={decoded.channel_ids}")
+        lane_index = decoded.channel_ids.index(args.channel)
     else:
-        ch_index = max(range(8), key=lambda i: results[i].rms_ac)
+        lane_index = max(range(len(decoded.channels)), key=lambda i: results[i].rms_ac)
 
-    samples = decoded.channels[ch_index]
-    generic = results[ch_index]
+    channel_id = decoded.channel_ids[lane_index]
+    samples = decoded.channels[lane_index]
+    generic = results[lane_index]
 
     expected = args.candidate_rate / args.frequency_hz
     nearest = max(1, round(expected))
 
     print(f"Capture               : {meta_path}")
-    print(f"Channel               : CH{ch_index+1}")
+    print(f"Channel               : CH{channel_id}")
     print(f"Known frequency       : {args.frequency_hz:g} Hz")
     print(f"Candidate sample rate : {args.candidate_rate:g} samples/s/channel")
     print(f"Expected period       : {expected:.6f} samples")

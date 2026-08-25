@@ -613,3 +613,17 @@ compressing the display.
 For the clean 4 kHz CH2 capture and a 100 ksample/s/channel candidate rate, the
 500-sample record should span approximately 5 ms and therefore contain about
 20 cycles.
+
+## Active-channel rate experiment (2026-08-25)
+
+The mfg92 `hantek1008py` implementation configures active channels with `A0`
+set to the number of active channels and `AA` set to eight per-channel 0/1
+bytes. It also reports that reducing the active-channel count raises the actual
+sampling rate, with empirical factors `[4.56, 3.03, 2.27, 1.82, 1.51, 1.30,
+1.14, 1.00]` for 1 through 8 active channels respectively.
+
+Our capture tool now derives `A0` from the `AA` mask and stores
+`active_channels` in metadata. Decoding uses the active-channel count as the
+interleave width rather than assuming eight lanes. Initial validation should use
+the onboard 1 kHz / 2 Vpp square-wave source on CH1 and compare otherwise
+identical 8-, 4-, 2-, and 1-channel captures.

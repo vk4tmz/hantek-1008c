@@ -366,3 +366,25 @@ The default all-channel plotting behavior is unchanged.
 For the current 4 kHz validation capture at a candidate 100 ksample/s/channel,
 500 samples span about 5 ms, so approximately 20 waveform cycles should be
 visible if the raw CH2 lane directly represents the sine waveform.
+
+## Active-channel sample-rate experiment
+
+`capture_buffers.py` supports an explicit active-channel list. It derives both
+`A0` (active-channel count) and the eight-byte `AA` enable mask from this list,
+and records the result in capture metadata. The decoder and plotting/tone tools
+then de-interleave using only those active lanes.
+
+For the onboard 1 kHz / 2 Vpp square-wave test on CH1, keep A3/range/acquisition
+settings unchanged and capture this controlled progression:
+
+```bash
+python tools/capture_buffers.py --active-channels 1,2,3,4,5,6,7,8 --tag square-1khz-8ch
+python tools/capture_buffers.py --active-channels 1,2,3,4       --tag square-1khz-4ch
+python tools/capture_buffers.py --active-channels 1,2           --tag square-1khz-2ch
+python tools/capture_buffers.py --active-channels 1             --tag square-1khz-1ch
+```
+
+The reference implementation reports empirical effective-rate factors versus
+8-channel operation of 1.00x (8ch), 1.82x (4ch), 3.03x (2ch), and 4.56x (1ch).
+These captures are intended to verify those factors directly on this unit before
+we rely on them.

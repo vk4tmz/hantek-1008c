@@ -76,7 +76,8 @@ def main():
     p2 = resolve(meta_path, meta["buffer02"]["file"])
     p3 = resolve(meta_path, meta["buffer03"]["file"])
 
-    decoded = decode_buffers(p2.read_bytes(), p3.read_bytes())
+    active_channels = meta.get("resolved_configuration", {}).get("active_channels", list(range(1, 9)))
+    decoded = decode_buffers(p2.read_bytes(), p3.read_bytes(), active_channels=active_channels)
 
     stem = meta_path.name.replace("_capture.json", "")
 
@@ -106,8 +107,10 @@ def main():
         return 3
 
     if args.channel:
-        ch_index = args.channel - 1
-        samples = list(decoded.channels[ch_index])
+        if args.channel not in decoded.channel_ids:
+            raise SystemExit(f"ERROR: CH{args.channel} was not active in this capture; active={decoded.channel_ids}")
+        lane_index = decoded.channel_ids.index(args.channel)
+        samples = list(decoded.channels[lane_index])
         mean = statistics.fmean(samples)
         values = [x - mean for x in samples] if args.center else samples
 
@@ -146,7 +149,7 @@ def main():
         fig.savefig(png_path, dpi=150)
         plt.close(fig)
 
-        print(f"Decoded channels       : 8")
+        print(f"Decoded channels       : {len(decoded.channel_ids)} ({decoded.channel_ids})")
         print(f"Selected channel       : CH{args.channel}")
         print(f"Samples                : {len(samples)}")
         print(f"Channel mean           : {mean:.6f} ADC counts")
@@ -165,8 +168,8 @@ def main():
     x = list(range(decoded.samples_per_channel))
 
     fig, ax = plt.subplots(figsize=(12, 8))
-    for ch_index, samples in enumerate(decoded.channels, start=1):
-        ax.plot(x, samples, linewidth=0.9, label=f"CH{ch_index}")
+    for channel_id, samples in zip(decoded.channel_ids, decoded.channels):
+        ax.plot(x, samples, linewidth=0.9, label=f"CH{channel_id}")
 
     ax.set_title("Hantek 1008C Raw Capture")
     ax.set_xlabel("Sample index")
@@ -177,7 +180,7 @@ def main():
     fig.savefig(png_path, dpi=150)
     plt.close(fig)
 
-    print(f"Decoded channels       : 8")
+    print(f"Decoded channels       : {len(decoded.channel_ids)} ({decoded.channel_ids})")
     print(f"Samples per channel    : {decoded.samples_per_channel}")
     print(f"CSV                    : {csv_path}")
     print(f"PNG                    : {png_path}")

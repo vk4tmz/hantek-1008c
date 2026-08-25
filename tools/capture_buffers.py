@@ -30,6 +30,10 @@ def parse_args():
     p.add_argument("--a3", type=parse_byte, help="override A3 byte, e.g. 11")
     p.add_argument("--aa", type=parse_byte,
                    help="override AA value for all channels")
+    p.add_argument(
+        "--active-channels",
+        help="comma-separated active channels, e.g. 1 or 1,2,3,4; sets AA mask and A0 count",
+    )
     for ch in range(1, 9):
         p.add_argument(f"--ch{ch}-aa", type=parse_byte,
                        help=f"override AA value for CH{ch}")
@@ -47,6 +51,20 @@ def parse_args():
     return p.parse_args()
 
 
+def parse_active_channels(value):
+    if value is None:
+        return None
+    try:
+        channels = [int(x.strip()) for x in value.split(",") if x.strip()]
+    except ValueError as exc:
+        raise SystemExit("ERROR: --active-channels must be comma-separated channel numbers 1..8") from exc
+    if not channels or any(ch < 1 or ch > 8 for ch in channels):
+        raise SystemExit("ERROR: --active-channels must contain one or more channels in 1..8")
+    if len(set(channels)) != len(channels):
+        raise SystemExit("ERROR: --active-channels contains a duplicate channel")
+    return sorted(channels)
+
+
 def load_settings(args):
     path = Path(args.config)
     cfg = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -57,8 +75,11 @@ def load_settings(args):
     if len(ranges) != 8:
         raise SystemExit("ERROR: acquisition.ranges must contain exactly 8 bytes")
 
+    active_channels_arg = parse_active_channels(args.active_channels)
     aa_values = [0x01] * 8
-    if args.aa is not None:
+    if active_channels_arg is not None:
+        aa_values = [0x01 if ch in active_channels_arg else 0x00 for ch in range(1, 9)]
+    elif args.aa is not None:
         aa_values = [args.aa] * 8
     for ch in range(1, 9):
         value = getattr(args, f"ch{ch}_aa")
@@ -72,8 +93,14 @@ def load_settings(args):
         if v is not None:
             ranges[i] = v
 
+    active_channels = [i + 1 for i, value in enumerate(aa_values) if value != 0]
+    if not active_channels:
+        raise SystemExit("ERROR: at least one channel must be active")
+
     return {
         "config_file": str(path),
+        "active_channels": active_channels,
+        "active_channel_count": len(active_channels),
         "a3": args.a3 if args.a3 is not None else int(acq["a3"], 16),
         "ranges": ranges,
         "aa_values": aa_values,
@@ -128,7 +155,9 @@ def main():
     print("Resolved acquisition configuration:")
     print(f"  config : {s['config_file']}")
     print(f"  A3     : {s['a3']:02X}")
+    print(f"  A0     : {s['active_channel_count']:02X} ({s['active_channel_count']} active channel(s))")
     print("  AA     : " + " ".join(f"{x:02X}" for x in s["aa_values"]))
+    print("  active : " + ",".join(f"CH{x}" for x in s["active_channels"]))
     print("  A2     : " + " ".join(f"{x:02X}" for x in s["ranges"]))
     print(f"  A4     : {s['a4']:02X}")
     print(f"  AC     : {hex_bytes(s['ac'])}")
@@ -141,7 +170,7 @@ def main():
         ("B9", bytes.fromhex("B9 01 BF 04 00 00")), ("B7", bytes.fromhex("B7 00")),
         ("BB", bytes.fromhex("BB 08 00")), ("B0", b"\xB0"), ("F3", b"\xF3"),
         ("B5", b"\xB5"), ("B6", b"\xB6"), ("E5", b"\xE5"), ("F7", b"\xF7"),
-        ("F8", b"\xF8"), ("FA", b"\xFA"), ("F5", b"\xF5"), ("A0", bytes.fromhex("A0 08")),
+        ("F8", b"\xF8"), ("FA", b"\xFA"), ("F5", b"\xF5"), ("A0", bytes([0xA0, s["active_channel_count"]])),
         ("AA", bytes([0xAA] + s["aa_values"])),
         ("A3", bytes([0xA3, s["a3"]])), ("C1", bytes.fromhex("C1 00 00")),
         ("A7", bytes.fromhex("A7 00 00")), ("AC", bytes([0xAC]) + s["ac"]),
@@ -194,6 +223,8 @@ def main():
         "resolved_configuration": {
             "config_file": s["config_file"],
             "a3_hex": f"{s['a3']:02X}",
+            "a0_active_channel_count": s["active_channel_count"],
+            "active_channels": s["active_channels"],
             "aa_values_hex": [f"{x:02X}" for x in s["aa_values"]],
             "a2_ranges_hex": [f"{x:02X}" for x in s["ranges"]],
             "a4_hex": f"{s['a4']:02X}",
@@ -212,6 +243,8 @@ def main():
     print(f"Metadata : {meta}")
     print(
         "Resolved: "
+        f"A0={s['active_channel_count']:02X} "
+        f"active={','.join(map(str, s['active_channels']))} "
         f"A3={s['a3']:02X} "
         f"A2={'/'.join(f'{x:02X}' for x in s['ranges'])} "
         f"A4={s['a4']:02X} "
