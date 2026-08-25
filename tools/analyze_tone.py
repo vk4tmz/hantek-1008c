@@ -109,7 +109,7 @@ def main():
     # Also show the strongest local peaks, but do not call them the physical
     # fundamental automatically.
     scored = []
-    max_lag = min(len(samples)//2, 250)
+    max_lag = min(len(samples)//2, 2000)
     for lag in range(4, max_lag + 1):
         corr = normalized_autocorr(samples, lag)
         if corr is not None:
