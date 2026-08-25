@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hantek1008c.analysis import detect_square_edges
+from hantek1008c.analysis import detect_square_edges, reconstruct_thresholded_delta
 from hantek1008c.decode import decode_buffers
 
 A3_NS_PER_DIV = {
@@ -44,9 +44,12 @@ def parse_args():
 
 
 def a3_value(meta):
-    raw = meta.get("resolved_configuration", {}).get("a3")
+    rc = meta.get("resolved_configuration", {})
+    raw = rc.get("a3", rc.get("A3"))
     if raw is None:
-        raw = meta.get("resolved_configuration", {}).get("A3")
+        raw = meta.get("a3", meta.get("A3"))
+    if raw is None:
+        raw = meta.get("resolved", {}).get("a3")
     if isinstance(raw, int):
         return raw
     if isinstance(raw, str):
@@ -68,8 +71,9 @@ def main():
             print(f"{meta_path.name} | -- | -- | -- | requested CH{args.channel} not active")
             continue
         samples = dec.channels[dec.channel_ids.index(args.channel)]
+        reconstructed, delta_zero = reconstruct_thresholded_delta(samples)
         result = detect_square_edges(
-            samples,
+            reconstructed,
             frequency_hz=args.frequency_hz,
             persistence=args.persistence,
             min_separation=args.min_separation,
@@ -93,20 +97,20 @@ def main():
                 raise SystemExit("ERROR: matplotlib is required for --plot-dir")
             args.plot_dir.mkdir(parents=True, exist_ok=True)
             fig, ax = plt.subplots(figsize=(12, 5))
-            ax.plot(range(len(samples)), samples, linewidth=0.9)
+            ax.plot(range(len(reconstructed)), reconstructed, linewidth=0.9)
             ax.axhline(result.low_threshold, linestyle="--", linewidth=0.8)
             ax.axhline(result.high_threshold, linestyle="--", linewidth=0.8)
             for edge in result.edge_indices:
                 ax.axvline(edge, linewidth=0.8)
             ax.set_title(f"{meta_path.name} CH{args.channel} major-edge detection")
             ax.set_xlabel("Sample index")
-            ax.set_ylabel("Raw ADC counts")
+            ax.set_ylabel("Integrated delta counts")
             fig.tight_layout()
             out = args.plot_dir / f"{meta_path.stem}_ch{args.channel}_edges.png"
             fig.savefig(out, dpi=150)
             plt.close(fig)
             print(f"  plot: {out}")
-    print("\nRate is emitted only when at least three major edges survive hysteresis/debounce.")
+    print("\nWaveform is thresholded-delta reconstructed before edge detection. Rate is emitted only when at least three major edges survive.")
     return 0
 
 

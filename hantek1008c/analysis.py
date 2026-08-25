@@ -161,6 +161,32 @@ def _percentile(values, q: float) -> float:
     return vals[lo] * (1.0 - frac) + vals[hi] * frac
 
 
+
+def reconstruct_thresholded_delta(values, threshold: float = 6.0):
+    """Reconstruct waveform from Hantek's delta-like USB sample words.
+
+    Returns (reconstructed, zero).  The quiet baseline is estimated robustly
+    from the median/MAD, small residual deltas are suppressed, and the
+    remaining deltas are cumulatively integrated.
+    """
+    vals = list(values)
+    if not vals:
+        return [], 0.0
+    med = statistics.median(vals)
+    mad = statistics.median(abs(x-med) for x in vals)
+    quiet_threshold = max(6.0, 6.0*mad)
+    quiet = [x for x in vals if abs(x-med) < quiet_threshold] or vals
+    zero = statistics.fmean(quiet)
+    out=[]
+    acc=0.0
+    for x in vals:
+        d=x-zero
+        if abs(d) < threshold:
+            d=0.0
+        acc += d
+        out.append(acc)
+    return out, zero
+
 def detect_square_edges(
     values,
     *,
