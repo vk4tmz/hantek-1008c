@@ -647,3 +647,30 @@ Use `tools/sweep_a3.py` with only the driven channel active to measure the actua
 sample rate at each setting from square-wave edge spacing. Do not infer the rate
 from time/div alone because the ADC may cap or otherwise change behavior at the
 fastest settings.
+
+## Fixed regression corpus: CH1-only A3 sweep (2026-08-25)
+
+The original CH1-only onboard 1 kHz / 2 Vpp captures for A3 values `0x11`,
+`0x10`, `0x0F`, and `0x0E` are preserved in `tests/fixtures/a3_1khz/` together
+with capture metadata and transaction logs.
+
+Direct analysis of transition-impulse clusters in the raw little-endian words
+produces the following empirical anchors:
+
+| A3 | median half-period | inferred sample rate |
+|----|--------------------|----------------------|
+| 11 | ~400 samples       | ~800 ksample/s       |
+| 10 | ~400 samples       | ~800 ksample/s       |
+| 0F | ~1200 samples      | ~2.4 Msample/s       |
+| 0E | ~1200 samples      | ~2.4 Msample/s       |
+
+The `0x10` result is intentionally preserved even though a simple time/div
+model would predict a different rate: the raw captures show the same ~400
+sample half-period as `0x11`.  Future protocol work must explain this rather
+than silently normalizing it to the nominal timebase ladder.
+
+For timing regression, `detect_delta_impulse_edges()` detects clusters of raw
+excursions around the quiet code (~2001) and measures spacing between cluster
+centres.  This avoids coupling established timing results to the still
+experimental cumulative-delta waveform reconstruction, whose baseline can
+wander when the quiet-code estimate is biased by a fraction of a count.

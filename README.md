@@ -388,3 +388,29 @@ The reference implementation reports empirical effective-rate factors versus
 8-channel operation of 1.00x (8ch), 1.82x (4ch), 3.03x (2ch), and 4.56x (1ch).
 These captures are intended to verify those factors directly on this unit before
 we rely on them.
+
+### Regression corpus
+
+The repository now preserves the 2026-08-25 CH1-only onboard 1 kHz / 2 Vpp
+A3 sweep under `tests/fixtures/a3_1khz/`.  These are the original raw buffer
+payloads and capture metadata, not synthesized waveforms.
+
+Install and run the regression suite with:
+
+```bash
+pip install -e '.[test]'
+pytest -q
+```
+
+The tests currently protect:
+
+- CH1-only `A0`/`AA` configuration and the 500+7500 byte buffer split;
+- 4000 decoded words per CH1-only acquisition;
+- raw transition-impulse timing at A3 `11`, `10`, `0F`, and `0E`;
+- ~800 ksample/s at A3 `11` and `10` for the known 1 kHz source;
+- ~2.4 Msample/s at A3 `0F` and `0E`;
+- SHA-256 integrity of every raw regression payload.
+
+Timing tests deliberately operate on raw transition-impulse clusters rather
+than the experimental cumulative waveform reconstruction.  This keeps known-good
+sample timing independent of future fixes to baseline/voltage reconstruction.

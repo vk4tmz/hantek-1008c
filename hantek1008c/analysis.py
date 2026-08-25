@@ -134,6 +134,78 @@ def analyze_periodicity(values):
 
 
 @dataclass
+class DeltaImpulseEdges:
+    baseline: float
+    threshold: float
+    cluster_centers: list[float]
+    edge_spacings: list[float]
+    median_half_period: float | None
+    period_samples: float | None
+    sample_rate: float | None
+
+
+def detect_delta_impulse_edges(
+    values,
+    *,
+    frequency_hz: float | None = None,
+    threshold: float | None = None,
+    cluster_gap: int = 20,
+) -> DeltaImpulseEdges:
+    """Measure square-wave transition timing directly from raw Hantek words.
+
+    The live USB stream is centred on a quiet code (about 2001 in the current
+    captures) and a fast transition appears as a short cluster of larger
+    positive/negative excursions.  For timing work it is more robust to locate
+    those clusters directly than to cumulatively reconstruct the analogue
+    waveform, because a sub-count DC error in the quiet code can otherwise
+    integrate into baseline drift.
+
+    ``cluster_centers`` are arithmetic means of each contiguous transition
+    cluster.  A sample rate is emitted when at least three transition clusters
+    provide two adjacent half-period spacings.
+    """
+    vals = list(values)
+    if not vals:
+        return DeltaImpulseEdges(0.0, 0.0, [], [], None, None, None)
+
+    baseline = float(statistics.median(vals))
+    deviations = [abs(v - baseline) for v in vals]
+    mad = float(statistics.median(deviations))
+    if threshold is None:
+        threshold = max(8.0, 8.0 * mad)
+
+    candidates = [i for i, v in enumerate(vals) if abs(v - baseline) >= threshold]
+    if not candidates:
+        return DeltaImpulseEdges(baseline, float(threshold), [], [], None, None, None)
+
+    groups: list[list[int]] = [[candidates[0]]]
+    for idx in candidates[1:]:
+        if idx - groups[-1][-1] <= cluster_gap:
+            groups[-1].append(idx)
+        else:
+            groups.append([idx])
+
+    centers = [statistics.fmean(group) for group in groups]
+    spacings = [b - a for a, b in zip(centers, centers[1:])]
+    half = period = rate = None
+    if len(spacings) >= 2:
+        half = float(statistics.median(spacings))
+        period = 2.0 * half
+        if frequency_hz is not None:
+            rate = period * frequency_hz
+
+    return DeltaImpulseEdges(
+        baseline=baseline,
+        threshold=float(threshold),
+        cluster_centers=centers,
+        edge_spacings=spacings,
+        median_half_period=half,
+        period_samples=period,
+        sample_rate=rate,
+    )
+
+
+@dataclass
 class SquareWaveEdges:
     low_level: float
     high_level: float
