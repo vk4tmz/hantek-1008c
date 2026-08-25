@@ -344,3 +344,57 @@ def detect_square_edges(
         period_samples=period,
         sample_rate=rate,
     )
+
+@dataclass
+class NormalizedWaveform:
+    values: list[float]
+    reference_rate: float
+    measured_rate: float
+    scale_factor: float
+    low_level: float
+    high_level: float
+    midpoint: float
+    span: float
+
+
+def normalize_reconstructed_waveform(
+    reconstructed,
+    *,
+    measured_rate: float,
+    reference_rate: float = 800_000.0,
+    low_quantile: float = 0.20,
+    high_quantile: float = 0.80,
+) -> NormalizedWaveform:
+    """Rate-normalize and center an integrated-delta waveform.
+
+    The magnitude of an integrated edge impulse scales approximately with the
+    sample rate in the current Hantek captures.  Express the reconstruction in
+    a common reference-rate domain, then remove the arbitrary DC midpoint using
+    robust plateau percentiles.  The resulting units are *normalized decoder
+    counts*, not volts.
+
+    This intentionally does not attempt gain/range calibration; that belongs to
+    a later A2 calibration stage.
+    """
+    vals = list(reconstructed)
+    if not vals:
+        return NormalizedWaveform([], reference_rate, measured_rate, 0.0, 0.0, 0.0, 0.0, 0.0)
+    if measured_rate <= 0 or reference_rate <= 0:
+        raise ValueError("sample rates must be positive")
+
+    factor = reference_rate / measured_rate
+    scaled = [v * factor for v in vals]
+    low = _percentile(scaled, low_quantile)
+    high = _percentile(scaled, high_quantile)
+    midpoint = (low + high) / 2.0
+    centered = [v - midpoint for v in scaled]
+    return NormalizedWaveform(
+        values=centered,
+        reference_rate=float(reference_rate),
+        measured_rate=float(measured_rate),
+        scale_factor=float(factor),
+        low_level=float(low - midpoint),
+        high_level=float(high - midpoint),
+        midpoint=float(midpoint),
+        span=float(high - low),
+    )

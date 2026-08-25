@@ -93,3 +93,27 @@ def test_fixture_hashes_are_unchanged():
         assert expected is not None, f"fixture hash not initialized for {name}"
         actual = hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest()
         assert actual == expected
+
+
+def test_rate_normalized_square_wave_amplitude_is_consistent():
+    from hantek1008c.analysis import normalize_reconstructed_waveform, reconstruct_thresholded_delta
+
+    spans = {}
+    for meta_path in _capture_paths():
+        meta, _p2, _p3, decoded = _load(meta_path)
+        a3 = meta["resolved_configuration"]["a3_hex"].upper()
+        raw = decoded.channels[0]
+        timing = detect_delta_impulse_edges(raw, frequency_hz=1000.0)
+        assert timing.sample_rate is not None
+        reconstructed, _zero = reconstruct_thresholded_delta(raw)
+        normalized = normalize_reconstructed_waveform(
+            reconstructed, measured_rate=timing.sample_rate, reference_rate=800_000.0
+        )
+        spans[a3] = normalized.span
+        # Same 2 Vpp onboard source should land in the same decoder-domain band.
+        assert normalized.span == pytest.approx(72.5, abs=8.0)
+        assert normalized.low_level == pytest.approx(-normalized.high_level, abs=1e-9)
+
+    # In particular, the 2.4 MS/s captures should normalize back onto the
+    # 800 kS/s amplitude domain instead of remaining about 3x larger.
+    assert spans["0F"] / EXPECTED["0F"]["rate"] * EXPECTED["11"]["rate"] < 30
