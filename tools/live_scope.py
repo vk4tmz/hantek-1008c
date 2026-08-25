@@ -23,7 +23,7 @@ except ImportError as exc:
 
 from hantek1008c.transport import Hantek1008C, HantekUSBError
 from hantek1008c.decode import decode_buffers
-from hantek1008c.analysis import reconstruct_thresholded_delta, normalize_reconstructed_waveform
+from hantek1008c.analysis import reconstruct_thresholded_delta, reconstruct_continuous_delta, normalize_reconstructed_waveform
 
 SAMPLE_RATES = {
     0x11: 800_000.0,
@@ -53,6 +53,8 @@ def args():
                    help="minimum GUI pause between frames")
     p.add_argument("--raw", action="store_true",
                    help="plot raw 12-bit words instead of reconstructed waveform")
+    p.add_argument("--reconstruction", choices=["continuous","square"], default="continuous",
+                   help="waveform reconstruction mode; continuous preserves small sine-wave deltas (default), square suppresses small deltas for square-wave viewing")
     p.add_argument("--no-trigger", action="store_true",
                    help="do not align reconstructed trace on a rising midpoint crossing")
     return p.parse_args()
@@ -165,7 +167,10 @@ def main():
                     y=raw
                     zero=float(statistics.median(raw))
                 else:
-                    rec,zero=reconstruct_thresholded_delta(raw.tolist())
+                    if a.reconstruction == "square":
+                        rec,zero=reconstruct_thresholded_delta(raw.tolist())
+                    else:
+                        rec,zero=reconstruct_continuous_delta(raw.tolist())
                     norm=normalize_reconstructed_waveform(
                         rec,measured_rate=fs,reference_rate=800_000.0)
                     y=np.asarray(norm.values,float)
@@ -185,7 +190,7 @@ def main():
                 fps=frame/elapsed
                 title.set_text(
                     f"Hantek 1008C  CH{a.channel}   A2={a.a2:02X}   A3={a.a3:02X}   "
-                    f"{fs/1e6:.3f} MS/s   {len(raw)} samples")
+                    f"{fs/1e6:.3f} MS/s   {len(raw)} samples   recon={a.reconstruction}")
                 status.set_text(
                     f"capture {frame}   {fps:.1f} frame/s   delta centre≈{zero:.2f}")
                 fig.canvas.draw_idle()

@@ -398,3 +398,60 @@ def normalize_reconstructed_waveform(
         midpoint=float(midpoint),
         span=float(high - low),
     )
+
+
+def reconstruct_continuous_delta(values, discontinuity_threshold: float = 64.0):
+    """Reconstruct continuous analogue waveforms from delta-like raw words.
+
+    Preserve ordinary small delta samples (including 2-8 kHz sine information)
+    and genuine square-wave transition impulses, while replacing only very
+    large isolated discontinuities observed in some sine captures.
+
+    The uploaded corpus shows genuine square edges at roughly <=20 counts from
+    baseline, whereas anomalous discontinuities in the 4/8 kHz sine captures
+    reach roughly 270 counts.  A conservative default threshold of 64 therefore
+    separates the two on the current hardware without suppressing real edges.
+
+    Returns (linearly-detrended integrated waveform, acquisition-local median).
+    """
+    vals = list(values)
+    if not vals:
+        return [], 0.0
+
+    zero = float(statistics.median(vals))
+    deltas = [float(v) - zero for v in vals]
+
+    # Replace only implausibly large isolated discontinuities using a local
+    # median of nearby non-discontinuous deltas. Do not clip normal deltas.
+    cleaned = list(deltas)
+    lim = float(discontinuity_threshold)
+    for i, d in enumerate(deltas):
+        if abs(d) <= lim:
+            continue
+        lo = max(0, i - 4)
+        hi = min(len(deltas), i + 5)
+        good = [x for x in deltas[lo:hi] if abs(x) <= lim]
+        cleaned[i] = float(statistics.median(good)) if good else 0.0
+
+    acc = 0.0
+    out = []
+    for d in cleaned:
+        acc += d
+        out.append(acc)
+
+    # Remove best-fit linear drift caused by sub-count baseline error.
+    n = len(out)
+    if n >= 2:
+        mx = (n - 1) / 2.0
+        my = statistics.fmean(out)
+        num = 0.0
+        den = 0.0
+        for i, y in enumerate(out):
+            dx = i - mx
+            num += dx * (y - my)
+            den += dx * dx
+        slope = num / den if den else 0.0
+        intercept = my - slope * mx
+        out = [y - (intercept + slope * i) for i, y in enumerate(out)]
+
+    return out, zero
