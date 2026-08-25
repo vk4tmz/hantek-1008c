@@ -131,3 +131,118 @@ def analyze_periodicity(values):
         event_indices=events,
         event_spacings=spacings,
     )
+
+
+@dataclass
+class SquareWaveEdges:
+    low_level: float
+    high_level: float
+    low_threshold: float
+    high_threshold: float
+    edge_indices: list[int]
+    edge_spacings: list[int]
+    median_half_period: float | None
+    period_samples: float | None
+    sample_rate: float | None
+
+
+def _percentile(values, q: float) -> float:
+    vals = sorted(values)
+    if not vals:
+        raise ValueError("percentile of empty data")
+    if len(vals) == 1:
+        return float(vals[0])
+    pos = (len(vals) - 1) * q
+    lo = int(math.floor(pos))
+    hi = int(math.ceil(pos))
+    if lo == hi:
+        return float(vals[lo])
+    frac = pos - lo
+    return vals[lo] * (1.0 - frac) + vals[hi] * frac
+
+
+def detect_square_edges(
+    values,
+    *,
+    frequency_hz: float | None = None,
+    persistence: int = 8,
+    min_separation: int | None = None,
+) -> SquareWaveEdges:
+    """Detect only major HIGH/LOW transitions in a square-wave capture.
+
+    The Hantek calibration output can ring around an edge, so a single midpoint
+    threshold creates many false crossings.  Estimate the two plateaus from
+    robust percentiles, use Schmitt-like thresholds at 35%/65% of the level
+    span, require a crossing to persist, and reject implausibly close edges.
+
+    A rate is reported only with at least three accepted edges (two adjacent
+    half-period measurements).  This deliberately fails closed for records
+    containing too little of the 1 kHz waveform.
+    """
+    vals = list(values)
+    if len(vals) < max(16, persistence * 2):
+        return SquareWaveEdges(0, 0, 0, 0, [], [], None, None, None)
+
+    # Using broad plateau percentiles is more robust to overshoot/ringing than
+    # min/max, while still working with the small (~tens of counts) ADC span.
+    low_level = _percentile(vals, 0.20)
+    high_level = _percentile(vals, 0.80)
+    span = high_level - low_level
+    if span < 4:
+        return SquareWaveEdges(low_level, high_level, low_level, high_level, [], [], None, None, None)
+
+    low_thr = low_level + 0.35 * span
+    high_thr = low_level + 0.65 * span
+    midpoint = (low_thr + high_thr) / 2.0
+
+    if min_separation is None:
+        # A 4000-sample record of the 1 kHz calibration signal should never
+        # contain legitimate edges this close in our current timebase sweep.
+        # 2.5% of the record = 100 samples, comfortably below the known
+        # A3=11 half-period (~400 samples).
+        min_separation = max(16, len(vals) // 40)
+
+    state = "high" if vals[0] >= midpoint else "low"
+    edges: list[int] = []
+    i = 1
+    last_edge = -10**9
+    while i <= len(vals) - persistence:
+        if state == "low":
+            crossed = all(v >= high_thr for v in vals[i:i + persistence])
+            if crossed and i - last_edge >= min_separation:
+                edges.append(i)
+                last_edge = i
+                state = "high"
+                i += persistence
+                continue
+        else:
+            crossed = all(v <= low_thr for v in vals[i:i + persistence])
+            if crossed and i - last_edge >= min_separation:
+                edges.append(i)
+                last_edge = i
+                state = "low"
+                i += persistence
+                continue
+        i += 1
+
+    spacings = [b - a for a, b in zip(edges, edges[1:])]
+    half = period = rate = None
+    if len(spacings) >= 2:
+        # Median tolerates a partially clipped first/last plateau and small
+        # trigger-position variation without treating ringing as an edge.
+        half = float(statistics.median(spacings))
+        period = 2.0 * half
+        if frequency_hz is not None:
+            rate = period * frequency_hz
+
+    return SquareWaveEdges(
+        low_level=low_level,
+        high_level=high_level,
+        low_threshold=low_thr,
+        high_threshold=high_thr,
+        edge_indices=edges,
+        edge_spacings=spacings,
+        median_half_period=half,
+        period_samples=period,
+        sample_rate=rate,
+    )

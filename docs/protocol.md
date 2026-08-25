@@ -627,3 +627,23 @@ Our capture tool now derives `A0` from the `AA` mask and stores
 interleave width rather than assuming eight lanes. Initial validation should use
 the onboard 1 kHz / 2 Vpp square-wave source on CH1 and compare otherwise
 identical 8-, 4-, 2-, and 1-channel captures.
+
+## 2026-08-25 active-channel / A3 timing experiment
+
+With the onboard 1 kHz square-wave reference and A3=0x11, measured periods were
+100, 200, 400 and 800 samples with 8, 4, 2 and 1 active channels respectively.
+This establishes approximately 800 ksample/s aggregate at A3=0x11, divided among
+active channels, while the 8000-byte burst payload remains constant.
+
+The reference implementation maps A3 to a 1-2-5 burst time/div ladder. Around
+0x11 the adjacent faster settings are:
+
+- 0x11 = 500 us/div
+- 0x10 = 200 us/div
+- 0x0F = 100 us/div
+- 0x0E = 50 us/div
+
+Use `tools/sweep_a3.py` with only the driven channel active to measure the actual
+sample rate at each setting from square-wave edge spacing. Do not infer the rate
+from time/div alone because the ADC may cap or otherwise change behavior at the
+fastest settings.
