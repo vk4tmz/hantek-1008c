@@ -28,6 +28,11 @@ def parse_args():
     p = argparse.ArgumentParser(description="Stateful Hantek 1008C acquisition capture.")
     p.add_argument("--config", default="config/default.toml")
     p.add_argument("--a3", type=parse_byte, help="override A3 byte, e.g. 11")
+    p.add_argument("--aa", type=parse_byte,
+                   help="override AA value for all channels")
+    for ch in range(1, 9):
+        p.add_argument(f"--ch{ch}-aa", type=parse_byte,
+                       help=f"override AA value for CH{ch}")
     p.add_argument("--range", dest="all_range", type=parse_byte,
                    help="override A2 range for all channels, e.g. 03")
     for ch in range(1, 9):
@@ -52,6 +57,14 @@ def load_settings(args):
     if len(ranges) != 8:
         raise SystemExit("ERROR: acquisition.ranges must contain exactly 8 bytes")
 
+    aa_values = [0x01] * 8
+    if args.aa is not None:
+        aa_values = [args.aa] * 8
+    for ch in range(1, 9):
+        value = getattr(args, f"ch{ch}_aa")
+        if value is not None:
+            aa_values[ch - 1] = value
+
     if args.all_range is not None:
         ranges = [args.all_range] * 8
     for i in range(8):
@@ -63,6 +76,7 @@ def load_settings(args):
         "config_file": str(path),
         "a3": args.a3 if args.a3 is not None else int(acq["a3"], 16),
         "ranges": ranges,
+        "aa_values": aa_values,
         "a4": args.a4 if args.a4 is not None else int(acq["a4"], 16),
         "ac": hex_payload(args.ac) if args.ac else hex_payload(acq["ac"]),
         "delay_ms": args.delay_ms if args.delay_ms is not None else int(cap.get("inter_command_delay_ms", 30)),
@@ -114,6 +128,7 @@ def main():
     print("Resolved acquisition configuration:")
     print(f"  config : {s['config_file']}")
     print(f"  A3     : {s['a3']:02X}")
+    print("  AA     : " + " ".join(f"{x:02X}" for x in s["aa_values"]))
     print("  A2     : " + " ".join(f"{x:02X}" for x in s["ranges"]))
     print(f"  A4     : {s['a4']:02X}")
     print(f"  AC     : {hex_bytes(s['ac'])}")
@@ -127,7 +142,7 @@ def main():
         ("BB", bytes.fromhex("BB 08 00")), ("B0", b"\xB0"), ("F3", b"\xF3"),
         ("B5", b"\xB5"), ("B6", b"\xB6"), ("E5", b"\xE5"), ("F7", b"\xF7"),
         ("F8", b"\xF8"), ("FA", b"\xFA"), ("F5", b"\xF5"), ("A0", bytes.fromhex("A0 08")),
-        ("AA", bytes.fromhex("AA 01 01 01 01 01 01 01 01")),
+        ("AA", bytes([0xAA] + s["aa_values"])),
         ("A3", bytes([0xA3, s["a3"]])), ("C1", bytes.fromhex("C1 00 00")),
         ("A7", bytes.fromhex("A7 00 00")), ("AC", bytes([0xAC]) + s["ac"]),
     ]
@@ -179,6 +194,7 @@ def main():
         "resolved_configuration": {
             "config_file": s["config_file"],
             "a3_hex": f"{s['a3']:02X}",
+            "aa_values_hex": [f"{x:02X}" for x in s["aa_values"]],
             "a2_ranges_hex": [f"{x:02X}" for x in s["ranges"]],
             "a4_hex": f"{s['a4']:02X}",
             "ac_hex": s["ac"].hex().upper(),
