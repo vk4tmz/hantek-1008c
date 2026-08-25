@@ -49,6 +49,8 @@ def parse_args():
     p.add_argument("--tag", help="short label added to output filenames")
     p.add_argument("--reference-burst-guards", action="store_true",
                    help="send reference-driver E4 01 / E6 01 guard commands immediately before and after burst acquisition")
+    p.add_argument("--reference-f6", action="store_true",
+                   help="send reference-driver F6 command at the startup/calibration position")
     p.add_argument("--dry-run", action="store_true", help="print resolved configuration and exit")
     return p.parse_args()
 
@@ -112,6 +114,7 @@ def load_settings(args):
         "timeout_ms": args.timeout_ms if args.timeout_ms is not None else int(cap.get("read_timeout_ms", 1000)),
         "tag": args.tag,
         "reference_burst_guards": bool(args.reference_burst_guards),
+        "reference_f6": bool(args.reference_f6),
     }
 
 
@@ -167,6 +170,7 @@ def main():
     print(f"  delay  : {s['delay_ms']} ms")
     print(f"  timeout: {s['timeout_ms']} ms")
     print(f"  ref burst guards: {'yes' if s['reference_burst_guards'] else 'no'}")
+    print(f"  ref F6          : {'yes' if s['reference_f6'] else 'no'}")
     if args.dry_run:
         return 0
 
@@ -174,7 +178,9 @@ def main():
         ("B9", bytes.fromhex("B9 01 BF 04 00 00")), ("B7", bytes.fromhex("B7 00")),
         ("BB", bytes.fromhex("BB 08 00")), ("B0", b"\xB0"), ("F3", b"\xF3"),
         ("B5", b"\xB5"), ("B6", b"\xB6"), ("E5", b"\xE5"), ("F7", b"\xF7"),
-        ("F8", b"\xF8"), ("FA", b"\xFA"), ("F5", b"\xF5"), ("A0", bytes([0xA0, s["active_channel_count"]])),
+        ("F8", b"\xF8"), ("FA", b"\xFA"),
+        *(([("REF-F6", b"\xF6")] if s["reference_f6"] else [])),
+        ("F5", b"\xF5"), ("A0", bytes([0xA0, s["active_channel_count"]])),
         ("AA", bytes([0xAA] + s["aa_values"])),
         ("A3", bytes([0xA3, s["a3"]])), ("C1", bytes.fromhex("C1 00 00")),
         ("A7", bytes.fromhex("A7 00 00")), ("AC", bytes([0xAC]) + s["ac"]),
@@ -240,6 +246,7 @@ def main():
         "timestamp_utc": stamp,
         "tag": args.tag,
         "reference_burst_guards": bool(args.reference_burst_guards),
+        "reference_f6": bool(args.reference_f6),
         "vid_pid": "0783:5725",
         "resolved_configuration": {
             "config_file": s["config_file"],
@@ -253,6 +260,7 @@ def main():
             "inter_command_delay_ms": s["delay_ms"],
             "timeout_ms": s["timeout_ms"],
             "reference_burst_guards": s["reference_burst_guards"],
+            "reference_f6": s["reference_f6"],
         },
         "buffer02": {"selector": 2, "reported_size_raw_hex": raw02.hex().upper(),
                      "reported_size_bytes": size02, "file": str(p2), "bytes_written": len(buf02)},
