@@ -47,6 +47,8 @@ def parse_args():
     p.add_argument("--delay-ms", type=int, help="inter-command delay")
     p.add_argument("--timeout-ms", type=int, help="USB read/write timeout")
     p.add_argument("--tag", help="short label added to output filenames")
+    p.add_argument("--reference-burst-guards", action="store_true",
+                   help="send reference-driver E4 01 / E6 01 guard commands immediately before and after burst acquisition")
     p.add_argument("--dry-run", action="store_true", help="print resolved configuration and exit")
     return p.parse_args()
 
@@ -109,6 +111,7 @@ def load_settings(args):
         "delay_ms": args.delay_ms if args.delay_ms is not None else int(cap.get("inter_command_delay_ms", 30)),
         "timeout_ms": args.timeout_ms if args.timeout_ms is not None else int(cap.get("read_timeout_ms", 1000)),
         "tag": args.tag,
+        "reference_burst_guards": bool(args.reference_burst_guards),
     }
 
 
@@ -163,6 +166,7 @@ def main():
     print(f"  AC     : {hex_bytes(s['ac'])}")
     print(f"  delay  : {s['delay_ms']} ms")
     print(f"  timeout: {s['timeout_ms']} ms")
+    print(f"  ref burst guards: {'yes' if s['reference_burst_guards'] else 'no'}")
     if args.dry_run:
         return 0
 
@@ -197,6 +201,15 @@ def main():
                 tx(scope, label, payload, s)
                 time.sleep(s["delay_ms"] / 1000)
             print("\n=== Waiting/acquisition sequence ===")
+            # The public hantek1008py burst path brackets acquisition with E4 01
+            # and E6 01.  Its source explicitly notes these may not be required,
+            # so this experiment keeps them opt-in and changes nothing else.
+            if s["reference_burst_guards"]:
+                tx(scope, "REF-E4-pre", bytes.fromhex("E4 01"), s)
+                time.sleep(s["delay_ms"] / 1000)
+                tx(scope, "REF-E6-pre", bytes.fromhex("E6 01"), s)
+                time.sleep(s["delay_ms"] / 1000)
+
             for label, payload in wait:
                 tx(scope, label, payload, s)
                 time.sleep(s["delay_ms"] / 1000)
@@ -207,6 +220,13 @@ def main():
             print("\n=== Buffer 03 ===")
             size03, raw03 = query_size(scope, 3, s)
             buf03 = read_buffer(scope, 3, size03, s)
+
+            if s["reference_burst_guards"]:
+                print("\n=== Reference-driver post-burst guards ===")
+                tx(scope, "REF-E4-post", bytes.fromhex("E4 01"), s)
+                time.sleep(s["delay_ms"] / 1000)
+                tx(scope, "REF-E6-post", bytes.fromhex("E6 01"), s)
+                time.sleep(s["delay_ms"] / 1000)
     except HantekUSBError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 4
@@ -219,6 +239,7 @@ def main():
     metadata = {
         "timestamp_utc": stamp,
         "tag": args.tag,
+        "reference_burst_guards": bool(args.reference_burst_guards),
         "vid_pid": "0783:5725",
         "resolved_configuration": {
             "config_file": s["config_file"],
@@ -231,6 +252,7 @@ def main():
             "ac_hex": s["ac"].hex().upper(),
             "inter_command_delay_ms": s["delay_ms"],
             "timeout_ms": s["timeout_ms"],
+            "reference_burst_guards": s["reference_burst_guards"],
         },
         "buffer02": {"selector": 2, "reported_size_raw_hex": raw02.hex().upper(),
                      "reported_size_bytes": size02, "file": str(p2), "bytes_written": len(buf02)},
