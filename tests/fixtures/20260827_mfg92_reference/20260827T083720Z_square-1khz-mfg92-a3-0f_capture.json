@@ -1,0 +1,36 @@
+{
+  "timestamp_utc": "20260827T083720Z",
+  "tag": "square-1khz-mfg92-a3-0f",
+  "mode": "mfg92-reference-full-init-experiment",
+  "a3_hex": "0F",
+  "range_hex": "03",
+  "buffer02_bytes": 0,
+  "buffer03_bytes": 8000,
+  "word_count": 4000,
+  "raw_word_summary": {
+    "min": 2001,
+    "max": 2206,
+    "mean": 2122.84225
+  },
+  "calibration_passes": {
+    "1": {
+      "word_count": 4000,
+      "mean": 1986.403,
+      "min": 1839,
+      "max": 2128
+    },
+    "2": {
+      "word_count": 4000,
+      "mean": 1996.5635,
+      "min": 1878,
+      "max": 2105
+    },
+    "3": {
+      "word_count": 4000,
+      "mean": 2015.43325,
+      "min": 2001,
+      "max": 2035
+    }
+  },
+  "transaction_log": "captures/20260827T083720Z_square-1khz-mfg92-a3-0f_capture-transactions.jsonl"
+}

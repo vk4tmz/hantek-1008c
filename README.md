@@ -414,3 +414,23 @@ The tests currently protect:
 Timing tests deliberately operate on raw transition-impulse clusters rather
 than the experimental cumulative waveform reconstruction.  This keeps known-good
 sample timing independent of future fixes to baseline/voltage reconstruction.
+
+## Canonical direct-ADC acquisition (2026-08-27)
+
+Hardware testing against the public `mfg92/hantek1008py` initialization sequence
+showed that the full initialization places the 1008C into direct-ADC burst mode.
+In that state a one-channel burst is 4000 direct 12-bit samples (normally 8000
+bytes in buffer 03, buffer 02 empty) and requires **no delta integration or
+linear detrending**.
+
+Use the live viewer:
+
+    python tools/live_scope.py --channel 1
+
+or save one canonical direct-ADC burst:
+
+    python tools/capture_direct_adc.py --channel 1 --a3 0f --range 03
+
+`tools/capture_buffers.py` remains available as the legacy/minimal protocol-lab
+capture path because its wrong-state fixtures are valuable negative regression
+evidence. It is not the canonical oscilloscope acquisition path.
