@@ -1,0 +1,17 @@
+# Hantek 1008C reverse-engineering capture defaults.
+# Values are hexadecimal byte strings, excluding the command byte itself.
+
+[acquisition]
+# A3 appears to control timebase/acquisition timing.
+a3 = "11"
+
+# Per-channel A2 range selector, CH1..CH8.
+ranges = ["03", "03", "03", "03", "03", "03", "03", "03"]
+
+# Other currently-known setup payloads.
+a4 = "01"
+ac = "01 F4 00 09 C5 00 09 C5"
+
+[capture]
+read_timeout_ms = 1000
+inter_command_delay_ms = 30
