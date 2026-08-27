@@ -105,3 +105,117 @@ def test_phase_only_ground_calibration_is_not_accepted_as_the_fix():
     # A phase-only correction is not an improvement over the existing path;
     # this prevents accidentally promoting today's rejected hypothesis.
     assert mean_abs_slope(phase) >= mean_abs_slope(current)
+
+
+def _linear_detrend(values):
+    y = np.asarray(values, dtype=float)
+    x = np.arange(len(y), dtype=float)
+    slope, intercept = np.polyfit(x, y, 1)
+    return y - (slope * x + intercept)
+
+
+def _clean_deltas_like_current_decoder(words, limit=64.0):
+    words = np.asarray(words, dtype=float)
+    zero = float(np.median(words))
+    deltas = words - zero
+    cleaned = deltas.copy()
+    for i, value in enumerate(deltas):
+        if abs(value) <= limit:
+            continue
+        lo = max(0, i - 4)
+        hi = min(len(deltas), i + 5)
+        nearby = deltas[lo:hi]
+        good = nearby[np.abs(nearby) <= limit]
+        cleaned[i] = float(np.median(good)) if len(good) else 0.0
+    return cleaned
+
+
+def _reconstruct_leaky_delta(words, retention):
+    """Experimental rejected hypothesis: inverse of a leaky first-difference."""
+    deltas = _clean_deltas_like_current_decoder(words)
+    out = np.empty(len(deltas), dtype=float)
+    acc = 0.0
+    for i, delta in enumerate(deltas):
+        acc = retention * acc + delta
+        out[i] = acc
+    return _linear_detrend(out)
+
+
+def _sine_fit_correlation(values, frequency_hz, sample_rate=2_400_400.0):
+    y = np.asarray(values, dtype=float)
+    t = np.arange(len(y), dtype=float) / sample_rate
+    design = np.column_stack([
+        np.ones(len(y)),
+        np.sin(2 * np.pi * frequency_hz * t),
+        np.cos(2 * np.pi * frequency_hz * t),
+    ])
+    beta = np.linalg.lstsq(design, y, rcond=None)[0]
+    fitted = design @ beta
+    return float(np.corrcoef(y, fitted)[0, 1])
+
+
+def test_rejected_leaky_integrator_tradeoff_breaks_sine_fidelity():
+    """A square-flattening leaky integrator is not waveform-agnostic enough.
+
+    retention=0.99966 was the offline square-optimal value on the 2026-08-27
+    fixture.  It roughly halves the square plateau slope metric, but degrades
+    the independent 2 kHz sine regression substantially.  Preserve this
+    negative result so the hypothesis is not accidentally promoted later.
+    """
+    _, square = load_capture(SQUARE)
+    current_square, _ = reconstruct_continuous_delta(square)
+    leaky_square = _reconstruct_leaky_delta(square, 0.99966)
+
+    windows = [(100, 650), (900, 1850), (2100, 3050), (3300, 3900)]
+
+    def mean_abs_slope(y):
+        y = np.asarray(y, dtype=float)
+        slopes = []
+        for a, b in windows:
+            x = np.arange(a, b, dtype=float)
+            slopes.append(np.polyfit(x, y[a:b], 1)[0])
+        return float(np.mean(np.abs(slopes)))
+
+    assert mean_abs_slope(leaky_square) < 0.6 * mean_abs_slope(current_square)
+
+    sine_json = Path(__file__).parent / "fixtures" / "sine_2k_8k" / "20260825T090035Z_sine-2khz-ch1-a3-0f_capture.json"
+    _, sine = load_capture(sine_json)
+    current_sine, _ = reconstruct_continuous_delta(sine)
+    leaky_sine = _reconstruct_leaky_delta(sine, 0.99966)
+
+    current_corr = _sine_fit_correlation(current_sine, 2000.0)
+    leaky_corr = _sine_fit_correlation(leaky_sine, 2000.0)
+
+    assert current_corr > 0.94
+    assert leaky_corr < 0.80
+    assert leaky_corr < 0.85 * current_corr
+
+
+def test_pair_averaging_phase_bias_does_not_fix_square_plateau_drift():
+    """Removing the measured even/odd phase offset is a secondary calibration only.
+
+    Adjacent-pair averaging nearly cancels the two-phase raw-code offset while
+    preserving the 4000-sample timeline.  It leaves the square plateau drift
+    metric essentially unchanged, so phase alternation is not the root cause.
+    """
+    _, square = load_capture(SQUARE)
+    pair_corrected = np.asarray(square, dtype=float).copy()
+    pair_means = (pair_corrected[0::2] + pair_corrected[1::2]) / 2.0
+    pair_corrected[0::2] = pair_means
+    pair_corrected[1::2] = pair_means
+
+    current, _ = reconstruct_continuous_delta(square)
+    corrected, _ = reconstruct_continuous_delta(pair_corrected)
+
+    windows = [(100, 650), (900, 1850), (2100, 3050), (3300, 3900)]
+
+    def mean_abs_slope(y):
+        y = np.asarray(y, dtype=float)
+        return float(np.mean([
+            abs(np.polyfit(np.arange(a, b, dtype=float), y[a:b], 1)[0])
+            for a, b in windows
+        ]))
+
+    current_metric = mean_abs_slope(current)
+    corrected_metric = mean_abs_slope(corrected)
+    assert corrected_metric == pytest.approx(current_metric, rel=0.01)
