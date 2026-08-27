@@ -1,4 +1,13 @@
 {
+  "tests/fixtures/20260827_bias_lab/20260827T074648Z_square-1khz-a3-0f-fresh_buffer02.bin": "c162cd6cbd3e7b2d76cc1d7759ebbdd8e5ce9e15fa3fc91d0ccbb3e247d1dfd7",
+  "tests/fixtures/20260827_bias_lab/20260827T074648Z_square-1khz-a3-0f-fresh_buffer03.bin": "704d261dcb16ef199a906f5a6080ab6b62b21876fe9fa1b67de70e5f62674d85",
+  "tests/fixtures/20260827_bias_lab/20260827T074648Z_square-1khz-a3-0f-fresh_capture-transactions.jsonl": "d47818d198203e0ea3bbb1b2664f77e3a96825d7a9f39f3d7223a46f6ed6c01c",
+  "tests/fixtures/20260827_bias_lab/20260827T074648Z_square-1khz-a3-0f-fresh_capture.json": "7e95ff6f5b809e383ad335c8c4048aa78ce06858532922811df8dbfee0a9d377",
+  "tests/fixtures/20260827_bias_lab/20260827T075115Z_grounded-a3-0f_buffer02.bin": "cb676b6ef6e99772a2d29dd80a5231e725aee4c9b55461c1b2d09e30c4909c8c",
+  "tests/fixtures/20260827_bias_lab/20260827T075115Z_grounded-a3-0f_buffer03.bin": "685aa2fa6a81ec59ab3b4ffcf7f0eab5746d14ef4362b63f3cb9d21dc155c542",
+  "tests/fixtures/20260827_bias_lab/20260827T075115Z_grounded-a3-0f_capture-transactions.jsonl": "ea2fc0d1047064c2d3d215760818a330f2ec4920436f76dc9dcd0db4aca7666d",
+  "tests/fixtures/20260827_bias_lab/20260827T075115Z_grounded-a3-0f_capture.json": "07b0f80bc5525d0be9f8ca6e10f4f805d120cfbd4d3f30abf4ef66d244b7b292",
+  "tests/fixtures/20260827_bias_lab/README.md": "527d8309f65c74ecc4690a603bf0113fce6565cca28c2c09a14a153ae2b0e843",
   "tests/fixtures/a2_1khz/20260825T093655Z_square-1000hz-ch1-a3-0f-a2-03_buffer02.bin": "a5a42713d7a1a02035e381417057753f92f2f27dbadf21e0688e9ac738cb06e2",
   "tests/fixtures/a2_1khz/20260825T093655Z_square-1000hz-ch1-a3-0f-a2-03_buffer03.bin": "6d55df8443ba0f442ef885c6036c811d7d9b321fb986d05a41c649459c1d90ed",
   "tests/fixtures/a2_1khz/20260825T093655Z_square-1000hz-ch1-a3-0f-a2-03_capture-transactions.jsonl": "819551703a26f90e504899a86aa78a0cb24b8d5c90c80630d375fcf74e0f8433",
