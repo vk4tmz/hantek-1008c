@@ -42,7 +42,7 @@ def _query_buffer(scope: Any, selector: int, timeout_ms: int) -> bytes:
     return _read_buffer(scope, selector, int.from_bytes(reply, "big"), timeout_ms)
 
 
-def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 20) -> int:
+def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> int:
     """Poll A5 until the device reports a completed/ready acquisition (2 or 3)."""
     for _ in range(tries):
         reply = _transact(scope, bytes.fromhex("A5 5A"), timeout_ms)
@@ -51,8 +51,7 @@ def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 20) -> int:
             return int(state)
         time.sleep(0.002)
     raise _usb_error(
-        f"A5 never reached ready state 2/3 in {tries} polls; "
-        "the device may need an unplug/replug"
+        f"A5 never reached ready state 2/3 in {tries} polls"
     )
 
 
