@@ -42,33 +42,53 @@ def _query_buffer(scope: Any, selector: int, timeout_ms: int) -> bytes:
     return _read_buffer(scope, selector, int.from_bytes(reply, "big"), timeout_ms)
 
 
-def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> int:
-    """Poll A5 until the device reports a completed/ready acquisition (2 or 3)."""
-    for _ in range(tries):
+def wait_ready_with_polls(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> tuple[int, int]:
+    """Poll A5 until ready, returning ``(state, poll_count)``."""
+    for poll_count in range(1, tries + 1):
         reply = _transact(scope, bytes.fromhex("A5 5A"), timeout_ms)
         state = reply[-1] if reply else None
         if state in (2, 3):
-            return int(state)
+            return int(state), poll_count
         time.sleep(0.002)
     raise _usb_error(
         f"A5 never reached ready state 2/3 in {tries} polls"
     )
 
 
-def acquire_direct_buffers(scope: Any, timeout_ms: int = 1000) -> Tuple[bytes, bytes]:
-    """Acquire one direct-ADC burst after full initialization."""
+def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> int:
+    """Poll A5 until the device reports a completed/ready acquisition (2 or 3)."""
+    state, _ = wait_ready_with_polls(scope, timeout_ms, tries)
+    return state
+
+
+def acquire_direct_buffers(
+    scope: Any,
+    timeout_ms: int = 1000,
+    *,
+    arm_delay_s: float = 0.015,
+    return_ready_info: bool = False,
+):
+    """Acquire one direct-ADC burst after full initialization.
+
+    ``arm_delay_s`` is the historical delay between A4 and C0/C2. It is
+    configurable for protocol timing experiments; production/reference callers
+    retain the validated 15 ms default unless they opt in explicitly.
+    """
     _transact(scope, b"\xF3", timeout_ms)
     _transact(scope, bytes.fromhex("E4 01"), timeout_ms)
     _transact(scope, bytes.fromhex("E6 01"), timeout_ms)
     _transact(scope, bytes.fromhex("A4 01"), timeout_ms)
-    time.sleep(0.015)
+    if arm_delay_s > 0:
+        time.sleep(arm_delay_s)
     _transact(scope, b"\xC0", timeout_ms)
     _transact(scope, b"\xC2", timeout_ms)
-    wait_ready(scope, timeout_ms)
+    ready_state, ready_polls = wait_ready_with_polls(scope, timeout_ms)
     b2 = _query_buffer(scope, 2, timeout_ms)
     b3 = _query_buffer(scope, 3, timeout_ms)
     _transact(scope, bytes.fromhex("E4 01"), timeout_ms)
     _transact(scope, bytes.fromhex("E6 01"), timeout_ms)
+    if return_ready_info:
+        return b2, b3, ready_state, ready_polls
     return b2, b3
 
 
