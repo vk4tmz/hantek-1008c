@@ -24,32 +24,88 @@ def _transact(scope: Any, payload: bytes, timeout_ms: int) -> bytes:
     return tx.rx or b""
 
 
-def _read_buffer(scope: Any, selector: int, size: int, timeout_ms: int) -> bytes:
+def _read_buffer(scope: Any, selector: int, size: int, timeout_ms: int, *, metrics: dict | None = None) -> bytes:
     out = bytearray()
-    for _ in range((size + 63) // 64):
+    packet_metrics = []
+    phase_start = time.perf_counter_ns()
+    for packet_index in range((size + 63) // 64):
+        packet_start = time.perf_counter_ns()
+        write_start = packet_start
         scope.write(bytes([0xA6, selector]), timeout_ms=timeout_ms)
+        write_end = time.perf_counter_ns()
+        read_start = write_end
         packet = scope.read(size=64, timeout_ms=timeout_ms)
+        read_end = time.perf_counter_ns()
         if len(packet) != 64:
             raise _usb_error(f"A6 {selector:02X}: short packet {len(packet)}")
         out.extend(packet)
+        if metrics is not None:
+            packet_metrics.append({
+                "packet": packet_index,
+                "write_us": (write_end - write_start) / 1000.0,
+                "read_us": (read_end - read_start) / 1000.0,
+                "total_us": (read_end - packet_start) / 1000.0,
+            })
+    phase_end = time.perf_counter_ns()
+    if metrics is not None:
+        metrics.update({
+            "selector": selector,
+            "bytes": size,
+            "packets": len(packet_metrics),
+            "elapsed_ms": (phase_end - phase_start) / 1_000_000.0,
+            "packet_metrics": packet_metrics,
+        })
     return bytes(out[:size])
 
 
-def _query_buffer(scope: Any, selector: int, timeout_ms: int) -> bytes:
+def _query_buffer(scope: Any, selector: int, timeout_ms: int, *, metrics: dict | None = None) -> bytes:
+    c6_start = time.perf_counter_ns()
     reply = _transact(scope, bytes([0xC6, selector]), timeout_ms)
+    c6_end = time.perf_counter_ns()
     if len(reply) != 2:
         raise _usb_error(f"C6 {selector:02X}: expected 2-byte size, got {len(reply)}")
-    return _read_buffer(scope, selector, int.from_bytes(reply, "big"), timeout_ms)
+    size = int.from_bytes(reply, "big")
+    if metrics is not None:
+        metrics["c6_ms"] = (c6_end - c6_start) / 1_000_000.0
+        metrics["reported_bytes"] = size
+    read_metrics = {} if metrics is not None else None
+    data = _read_buffer(scope, selector, size, timeout_ms, metrics=read_metrics)
+    if metrics is not None:
+        metrics["a6"] = read_metrics
+        metrics["elapsed_ms"] = metrics["c6_ms"] + read_metrics["elapsed_ms"]
+    return data
 
 
-def wait_ready_with_polls(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> tuple[int, int]:
+def wait_ready_with_polls(
+    scope: Any, timeout_ms: int = 1000, tries: int = 100, *, metrics: dict | None = None
+) -> tuple[int, int]:
     """Poll A5 until ready, returning ``(state, poll_count)``."""
+    poll_rows = []
+    phase_start = time.perf_counter_ns()
     for poll_count in range(1, tries + 1):
+        poll_start = time.perf_counter_ns()
         reply = _transact(scope, bytes.fromhex("A5 5A"), timeout_ms)
+        poll_end = time.perf_counter_ns()
         state = reply[-1] if reply else None
+        if metrics is not None:
+            poll_rows.append({
+                "poll": poll_count,
+                "state": state,
+                "transaction_ms": (poll_end - poll_start) / 1_000_000.0,
+            })
         if state in (2, 3):
+            if metrics is not None:
+                metrics.update({
+                    "elapsed_ms": (poll_end - phase_start) / 1_000_000.0,
+                    "polls": poll_rows,
+                    "ready_state": int(state),
+                })
             return int(state), poll_count
+        sleep_start = time.perf_counter_ns()
         time.sleep(0.002)
+        sleep_end = time.perf_counter_ns()
+        if metrics is not None:
+            poll_rows[-1]["sleep_ms"] = (sleep_end - sleep_start) / 1_000_000.0
     raise _usb_error(
         f"A5 never reached ready state 2/3 in {tries} polls"
     )
@@ -65,28 +121,81 @@ def acquire_direct_buffers(
     scope: Any,
     timeout_ms: int = 1000,
     *,
-    arm_delay_s: float = 0.015,
+    arm_delay_s: float = 0.0,
     return_ready_info: bool = False,
+    return_metrics: bool = False,
 ):
     """Acquire one direct-ADC burst after full initialization.
 
-    ``arm_delay_s`` is the historical delay between A4 and C0/C2. It is
-    configurable for protocol timing experiments; production/reference callers
-    retain the validated 15 ms default unless they opt in explicitly.
+    ``arm_delay_s`` controls the historical fixed delay between A4 and C0/C2.
+    Hardware validation on 2026-08-28 (50-burst sweep, 100k-sample run, and
+    25-burst timing profile) established that no fixed delay is required: A5
+    readiness polling is the synchronization point. The canonical default is
+    therefore 0 seconds; nonzero values remain available for protocol labs.
+
+    With ``return_metrics=True`` the function also returns a timing dictionary
+    measured with ``perf_counter_ns()``. Timing collection is observational only
+    and does not alter or post-process captured samples.
     """
-    _transact(scope, b"\xF3", timeout_ms)
-    _transact(scope, bytes.fromhex("E4 01"), timeout_ms)
-    _transact(scope, bytes.fromhex("E6 01"), timeout_ms)
-    _transact(scope, bytes.fromhex("A4 01"), timeout_ms)
+    metrics = {"arm_delay_requested_ms": arm_delay_s * 1000.0} if return_metrics else None
+    total_start = time.perf_counter_ns()
+
+    def tx_timed(name: str, payload: bytes) -> bytes:
+        started = time.perf_counter_ns()
+        reply = _transact(scope, payload, timeout_ms)
+        ended = time.perf_counter_ns()
+        if metrics is not None:
+            metrics[name] = (ended - started) / 1_000_000.0
+            if name == "a4_ms":
+                # Absolute monotonic timestamp for gap-aware protocol labs.
+                # This is observational only and deliberately not used by the
+                # canonical sample path.
+                metrics["a4_start_ns"] = started
+                metrics["a4_end_ns"] = ended
+        return reply
+
+    tx_timed("f3_ms", b"\xF3")
+    tx_timed("e4_pre_ms", bytes.fromhex("E4 01"))
+    tx_timed("e6_pre_ms", bytes.fromhex("E6 01"))
+    tx_timed("a4_ms", bytes.fromhex("A4 01"))
     if arm_delay_s > 0:
+        delay_start = time.perf_counter_ns()
         time.sleep(arm_delay_s)
-    _transact(scope, b"\xC0", timeout_ms)
-    _transact(scope, b"\xC2", timeout_ms)
-    ready_state, ready_polls = wait_ready_with_polls(scope, timeout_ms)
-    b2 = _query_buffer(scope, 2, timeout_ms)
-    b3 = _query_buffer(scope, 3, timeout_ms)
-    _transact(scope, bytes.fromhex("E4 01"), timeout_ms)
-    _transact(scope, bytes.fromhex("E6 01"), timeout_ms)
+        delay_end = time.perf_counter_ns()
+        if metrics is not None:
+            metrics["arm_delay_actual_ms"] = (delay_end - delay_start) / 1_000_000.0
+    elif metrics is not None:
+        metrics["arm_delay_actual_ms"] = 0.0
+    tx_timed("c0_ms", b"\xC0")
+    tx_timed("c2_ms", b"\xC2")
+
+    a5_metrics = {} if metrics is not None else None
+    ready_state, ready_polls = wait_ready_with_polls(
+        scope, timeout_ms, metrics=a5_metrics
+    )
+    if metrics is not None:
+        metrics["a5"] = a5_metrics
+
+    b2_metrics = {} if metrics is not None else None
+    b2 = _query_buffer(scope, 2, timeout_ms, metrics=b2_metrics)
+    if metrics is not None:
+        metrics["buffer02"] = b2_metrics
+
+    b3_metrics = {} if metrics is not None else None
+    b3 = _query_buffer(scope, 3, timeout_ms, metrics=b3_metrics)
+    if metrics is not None:
+        metrics["buffer03"] = b3_metrics
+
+    tx_timed("e4_post_ms", bytes.fromhex("E4 01"))
+    tx_timed("e6_post_ms", bytes.fromhex("E6 01"))
+    total_end = time.perf_counter_ns()
+    if metrics is not None:
+        metrics["total_ms"] = (total_end - total_start) / 1_000_000.0
+
+    if return_metrics and return_ready_info:
+        return b2, b3, ready_state, ready_polls, metrics
+    if return_metrics:
+        return b2, b3, metrics
     if return_ready_info:
         return b2, b3, ready_state, ready_polls
     return b2, b3
