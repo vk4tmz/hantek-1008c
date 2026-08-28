@@ -247,24 +247,40 @@ def validate_onboard_reference(
     high = _quantile(all_words, 0.90)
     measured_vpp = (high - low) * cal.volts_per_count
 
-    half_periods: list[float] = []
-    threshold = (low + high) / 2.0
+    # The onboard reference is a square wave, so use a Schmitt-style detector
+    # for this validation-only measurement.  A single midpoint threshold is
+    # vulnerable to transition ringing/noise, which can create several toggles
+    # around one physical edge and falsely double the estimated frequency.
+    span = high - low
+    low_trigger = low + (0.25 * span)
+    high_trigger = low + (0.75 * span)
+    periods: list[float] = []
     for frame in frame_list:
-        crossings: list[int] = []
-        prev = float(frame[0]) >= threshold
+        if not frame:
+            continue
+        state_high = float(frame[0]) >= ((low + high) / 2.0)
+        rising_edges: list[int] = []
+        falling_edges: list[int] = []
         for i, value in enumerate(frame[1:], start=1):
-            state = float(value) >= threshold
-            if state != prev:
-                crossings.append(i)
-                prev = state
-        half_periods.extend(
-            float(b - a) for a, b in zip(crossings, crossings[1:]) if b > a
+            sample = float(value)
+            if state_high:
+                if sample <= low_trigger:
+                    state_high = False
+                    falling_edges.append(i)
+            elif sample >= high_trigger:
+                state_high = True
+                rising_edges.append(i)
+        periods.extend(
+            float(b - a) for a, b in zip(rising_edges, rising_edges[1:]) if b > a
+        )
+        periods.extend(
+            float(b - a) for a, b in zip(falling_edges, falling_edges[1:]) if b > a
         )
     frequency = None
-    if half_periods:
-        median_half = statistics.median(half_periods)
-        if median_half > 0:
-            frequency = sample_rate / (2.0 * median_half)
+    if periods:
+        median_period = statistics.median(periods)
+        if median_period > 0:
+            frequency = sample_rate / median_period
 
     vpp_ok = expected_vpp * 0.80 <= measured_vpp <= expected_vpp * 1.20
     freq_ok = (

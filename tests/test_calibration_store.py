@@ -43,3 +43,18 @@ def test_reference_validation_does_not_modify_zero(tmp_path: Path):
     assert loaded is not None
     assert loaded.zero_adc == cal.zero_adc
     assert loaded.volts_per_count == cal.volts_per_count
+
+
+def test_reference_frequency_rejects_transition_ringing():
+    cal = build_zero_calibration("usb/1-2.3", 1, 3, [2001] * 100)
+    # A 1 kHz square at 2.4 MS/s with midpoint-crossing ringing around each
+    # transition.  The validation estimator must count physical cycles, not
+    # each noisy threshold toggle.
+    low = [2001] * 1195
+    rise = [2050, 2110, 2080, 2160, 2140]
+    high = [2201] * 1190
+    fall = [2150, 2090, 2120, 2040, 2060]
+    frame = low + rise + high + fall + low + rise + high + fall
+    result = validate_onboard_reference([frame], cal, 2_400_000.0)
+    assert result.measured_frequency_hz == pytest.approx(1000.0, rel=0.01)
+    assert result.passed
