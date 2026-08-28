@@ -67,6 +67,20 @@ class Hantek1008C:
         self._claimed=True
         return self
 
+    @property
+    def connection_id(self) -> str:
+        """Stable physical USB port path compatible with libsigrok."""
+        if self.dev is None:
+            raise HantekUSBError("Device is not open")
+        ports = tuple(getattr(self.dev, "port_numbers", ()) or ())
+        if not ports:
+            port = getattr(self.dev, "port_number", None)
+            ports = () if port is None else (int(port),)
+        if not ports:
+            raise HantekUSBError("Unable to determine USB physical port path")
+        suffix = ".".join(str(int(port)) for port in ports)
+        return f"usb/{int(self.dev.bus)}-{suffix}"
+
     def close(self):
         if self.dev is None:
             return

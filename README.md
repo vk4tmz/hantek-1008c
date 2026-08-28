@@ -66,6 +66,33 @@ python tools/probe_queries.py --command B5 --command B6
 
 Transactions are logged as JSONL under `captures/`.
 
+### Persistent zero calibration
+
+The user-assisted calibration tool stores hardware calibration independently of
+PulseView or libsigrok under the XDG data directory (normally
+`~/.local/share/hantek-1008c/calibration.ini`). The current identity key is the
+physical USB port path plus channel and A2 range; this avoids silently sharing
+calibration between two identical scopes until a stable device serial identity
+is proven.
+
+For the current CH1 / A2=03 MVP:
+
+```bash
+python tools/calibrate_zero.py --channel 1 --range 03
+```
+
+The tool performs two deliberately separate phases:
+
+1. Ground CH1. Several direct-ADC bursts establish and store the zero offset
+   only if the grounded data are stable.
+2. Connect the onboard 1 kHz / 2 Vp-p reference. The tool checks frequency and
+   amplitude and records the result, but this validation never changes the zero
+   offset or the nominal volts-per-count mapping.
+
+Normal acquisition must never infer zero from whatever signal happens to be
+connected at startup. The Python tools and native libsigrok driver consume the
+same persisted calibration data.
+
 ## Direction
 
 1. Confirm/document USB transport.
