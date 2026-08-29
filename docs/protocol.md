@@ -868,12 +868,78 @@ production libsigrok C9/CA implementation.
 
 ## Production handoff: official C9/CA Scan (2026-08-29)
 
-After grounded-input, 20 Hz cross-rate adjacency, C7/C8 control, and reference-tone timing validation, the libsigrok production driver now has an initial official Scan implementation limited to the three independently validated settings:
+After grounded-input, cross-rate adjacency, C7/C8 control, and reference-tone timing validation, the libsigrok production driver now has an official Scan implementation limited to the eight independently validated settings:
 
 - A3=1A (official 500 ms/div): nominal 800 CH1 observations/s.
 - A3=1B (official 1 s/div): nominal 400 CH1 observations/s.
 - A3=1C (official 2 s/div): nominal 200 CH1 observations/s.
+- A3=1D (official 5 s/div): nominal 80 CH1 observations/s.
+- A3=1E (official 10 s/div): nominal 40 CH1 observations/s.
+- A3=1F (official 20 s/div): nominal 20 CH1 observations/s.
+- A3=20 (official 50 s/div): nominal 8 CH1 observations/s.
+- A3=21 (official 100 s/div): nominal 4 CH1 observations/s.
 
 The production Scan path follows the same evidence-backed structural decode as this Python reference: stateful 4-byte framing across C9/CA transaction boundaries and temporal emission order `word0[n], word1[n], word0[n+1], word1[n+1], ...`. It performs no smoothing, averaging, interpolation, thresholding, detrending, integration, or waveform-specific reconstruction.
 
-The C7/C8 ROLL path remains deliberately separate and word0-only at its existing samplerates. The production Scan implementation must be hardware-validated in sigrok-cli/PulseView before the Scan region is expanded beyond A3=1A..1C.
+The C7/C8 ROLL path remains deliberately separate and word0-only at its existing
+samplerates.
+
+### Production hardware validation: A3=1A through A3=21
+
+Official C9/CA Scan has now passed real-hardware validation at all eight exposed
+production settings:
+
+- A3=1A: 800 Sa/s (official 500 ms/div).
+- A3=1B: 400 Sa/s (official 1 s/div).
+- A3=1C: 200 Sa/s (official 2 s/div).
+- A3=1D: 80 Sa/s (official 5 s/div).
+- A3=1E: 40 Sa/s (official 10 s/div).
+- A3=1F: 20 Sa/s (official 20 s/div).
+- A3=20: 8 Sa/s (official 50 s/div).
+- A3=21: 4 Sa/s (official 100 s/div).
+
+Both `sigrok-cli` and PulseView reproduced the ATR2x-USB audio reference at each
+setting: 20 Hz for A3=1A through 1D and 1 Hz for A3=1E through 21. At A3=1D,
+`sigrok-cli` delivered exactly 800 samples at the advertised 80 Sa/s and the
+emitted stream recovered exactly 20.000 Hz; PulseView showed the expected sparse
+approximately four-sample-per-cycle trace. This validates the existing
+production handoff without changing its waveform-agnostic structural decode or
+authorizing any waveform-specific reconstruction.
+
+For A3=1E/1F/20/21, the Python-first 1 Hz ATR2x-USB batch measured steady
+observation cadences (excluding the queued startup packet) of 40.1103, 20.1001,
+8.10128, and 4.10395 observations/s. The interleaved stream recovered the
+reference at approximately 1 Hz, and grounded controls at every setting had
+only 2--4 count spans with valid zero padding and no unhandled C9 event. The
+larger initial A3=1F packet contained 12 queued startup rows and was retained as
+observed rather than hidden or rewritten.
+
+Production `sigrok-cli` then delivered exactly 800, 400, 160, and 80 samples at
+40, 20, 8, and 4 Sa/s respectively. The unmodified emitted samples recovered
+1.000000, 0.999702, 1.000000, and 1.000000 Hz. PulseView showed clean sine waves
+at 40 and 20 Sa/s, a visibly coarse trace at 8 Sa/s, and the expected repeating
+roughly triangular four-samples-per-cycle trace at 4 Sa/s. The latter validates
+cadence and periodicity, not high-fidelity waveform shape.
+
+### A3=1D Python-first Scan validation
+
+The next official Scan setting, A3=1D (5 s/div), has now completed its
+waveform-agnostic Python protocol/reference investigation. Two 10-second 20 Hz
+ATR2x-USB captures measured 39.6869 and 39.6916 complete 4-byte rows/s, yielding
+79.3738 and 79.3831 temporally ordered CH1 observations/s. The reference-tone
+analyser recovered 19.8435 and 19.8458 Hz. The stronger repeat spanned 38 ADC
+counts.
+
+A separate grounded-CH1 control measured 39.5756 rows/s and 79.1512
+observations/s. Its complete interleaved observation stream occupied only
+2002..2006 (4 ADC counts) with a population standard deviation of 0.5892 count.
+Within-row and across-row mean absolute changes were similarly small at 0.5429
+and 0.4886 count respectively.
+
+Across all three A3=1D captures, steady-state CA padding was zero and no
+oversize C9 event occurred. Capture-end carry was preserved as observed (0 or
+2 bytes), never padded or discarded. These results support a nominal 80 Sa/s
+production Scan mapping for A3=1D while preserving the separate existing
+50 Sa/s C7/C8 ROLL mapping at the same A3 selector.
+
+Existing C7/C8 ROLL and C6/A6 BURST behaviour remain separate and unchanged.

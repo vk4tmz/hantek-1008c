@@ -315,16 +315,29 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
     }
 
 
+def select_profiles(selection: str) -> tuple[str, ...]:
+    if selection == "both":
+        return ("1a", "1b")
+    if selection == "next-four":
+        return ("1e", "1f", "20", "21")
+    if selection == "all":
+        return tuple(OFFICIAL_SCAN_PROFILES)
+    if selection not in OFFICIAL_SCAN_PROFILES:
+        raise ValueError(f"unknown official Scan profile selection: {selection}")
+    return (selection,)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Diagnostic reproduction of official Hantek C9/CA Scan Mode"
     )
-    profile_choices = tuple(OFFICIAL_SCAN_PROFILES) + ("both", "all")
+    profile_choices = tuple(OFFICIAL_SCAN_PROFILES) + ("both", "next-four", "all")
     ap.add_argument(
         "--profile", choices=profile_choices, default="1a",
         help=(
             "official Scan Mode profile from 1a=500ms/div through 28=20000s/div; "
-            "'both' runs 1a+1b and 'all' runs every Scan profile (default: 1a)"
+            "'both' runs 1a+1b, 'next-four' runs 1e+1f+20+21, and 'all' runs "
+            "every Scan profile (default: 1a)"
         ),
     )
     ap.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
@@ -341,12 +354,7 @@ def main() -> int:
     if min(args.pre_c2_ms, args.pre_c2_poll_ms, args.poll_ms) < 0 or args.capture_s <= 0:
         ap.error("timing values must be non-negative and --capture-s must be > 0")
 
-    if args.profile == "both":
-        profiles = ("1a", "1b")
-    elif args.profile == "all":
-        profiles = tuple(OFFICIAL_SCAN_PROFILES)
-    else:
-        profiles = (args.profile,)
+    profiles = select_profiles(args.profile)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
