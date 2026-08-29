@@ -89,12 +89,14 @@ def trim_ca_packet(packet: bytes, available: int) -> bytes:
 
 
 class ScanCandidateRowFramer:
-    """Statefully frame arbitrary Scan payload chunks into neutral 4-byte rows.
+    """Statefully frame arbitrary Scan payload chunks into 4-byte Scan rows.
 
     C9/CA transaction boundaries are transport boundaries, not proven logical-row
     boundaries.  ``feed()`` therefore carries 0..3 bytes between calls and emits
-    only complete rows.  No bytes are synthesized, discarded, averaged, selected,
-    or otherwise waveform-processed.  ``carry`` remains available to the caller
+    only complete rows.  Current C9/CA evidence identifies each complete row as
+    two temporally ordered CH1 ADC-like observations; framing itself still does
+    not combine, smooth, threshold, interpolate, or otherwise waveform-process
+    them.  ``carry`` remains available to the caller
     at capture end so an arbitrary wall-clock stop cannot silently lose a partial
     row.
     """
@@ -124,13 +126,13 @@ class ScanCandidateRowFramer:
 
 
 def le_u12_candidate_rows(data: bytes) -> list[tuple[int, int]]:
-    """Return complete candidate 4-byte rows as two neutral u12 words.
+    """Return complete C9/CA Scan rows as two little-endian u12 words.
 
-    The 2026-08-29 C9/CA Scan experiments strongly support a 4-byte logical
-    cadence for CH1-only acquisition, but the semantics of the two 16-bit
-    words are not yet proven.  This helper therefore exposes them only as
-    ``word0`` and ``word1`` and ignores any incomplete trailing bytes without
-    modifying the source buffer.
+    The row helper retains the historical ``word0``/``word1`` representation
+    because it is useful for transport diagnostics.  Cross-rate, grounded-input,
+    and 20 Hz timing evidence now supports interpreting those two positions in
+    official C9/CA Scan as successive CH1 ADC-like observations.  Incomplete
+    trailing bytes remain outside the returned rows and are never synthesized.
     """
     rows: list[tuple[int, int]] = []
     for i in range(0, len(data) - 3, 4):
@@ -138,6 +140,26 @@ def le_u12_candidate_rows(data: bytes) -> list[tuple[int, int]]:
         word1 = int.from_bytes(data[i + 2 : i + 4], "little") & 0x0FFF
         rows.append((word0, word1))
     return rows
+
+
+
+def scan_ch1_observations(rows: list[tuple[int, int]]) -> list[int]:
+    """Flatten proven C9/CA Scan rows into temporal CH1 observation order.
+
+    Evidence from grounded-input and 20 Hz cross-rate tests supports the order
+    ``word0[n], word1[n], word0[n+1], word1[n+1], ...`` for official Scan.
+    This is a structural decode only: values are neither filtered nor altered.
+    The interpretation is specific to C9/CA Scan and MUST NOT be reused for the
+    distinct C7/C8 ROLL 4-byte row.
+    """
+    return [value for row in rows for value in row]
+
+
+def scan_observation_rate(row_rate_hz: float) -> float:
+    """Return the CH1 observation cadence for official C9/CA Scan rows."""
+    if row_rate_hz < 0:
+        raise ValueError(f"row rate must be non-negative, got {row_rate_hz}")
+    return 2.0 * row_rate_hz
 
 def le_u12_words(data: bytes) -> list[int]:
     """Observational view of complete little-endian 16-bit words in raw data."""

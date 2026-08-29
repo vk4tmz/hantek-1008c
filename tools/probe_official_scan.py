@@ -47,6 +47,8 @@ from hantek1008c.scan_protocol import (
     decode_c9_available,
     le_u12_candidate_rows,
     le_u12_words,
+    scan_ch1_observations,
+    scan_observation_rate,
 )
 
 
@@ -226,10 +228,12 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         raise HantekUSBError("stateful Scan row framer disagrees with whole-buffer framing")
     candidate_word0 = [row[0] for row in candidate_rows]
     candidate_word1 = [row[1] for row in candidate_rows]
-    # Neutral structural diagnostics only: previous C7/C8 work used a 4-byte
-    # CH1 logical row, and the A3=1A/1B C9/CA throughput now makes the same
-    # grouping a useful candidate to report.  Do not assign semantics to either
-    # 16-bit word here and do not drop or alter trailing bytes.
+    # C9/CA Scan evidence now supports two temporally ordered CH1 observations
+    # per complete 4-byte row.  Preserve the row-oriented fields below for
+    # protocol diagnostics while exposing the evidence-backed flattened CH1
+    # stream separately.  This interpretation is specific to C9/CA Scan and is
+    # not shared with the distinct C7/C8 ROLL transport.
+    ch1_observations = scan_ch1_observations(candidate_rows)
     candidate_4byte_rows = len(candidate_rows)
     candidate_4byte_tail_bytes = len(row_framer.carry)
     scan_elapsed_s = (scan_ended_ns - scan_started_ns) / 1_000_000_000.0
@@ -280,6 +284,14 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         "candidate_row_framer_total_input_bytes": row_framer.total_input_bytes,
         "candidate_row_framer_total_rows": row_framer.total_rows,
         "candidate_4byte_row_throughput_per_s": (candidate_4byte_rows / scan_elapsed_s) if scan_elapsed_s else None,
+        "decoded_ch1_observation_count": len(ch1_observations),
+        "decoded_ch1_observation_throughput_per_s": (
+            scan_observation_rate(candidate_4byte_rows / scan_elapsed_s)
+            if scan_elapsed_s else None
+        ),
+        "decoded_ch1_min": min(ch1_observations) if ch1_observations else None,
+        "decoded_ch1_max": max(ch1_observations) if ch1_observations else None,
+        "decoded_ch1_span": (max(ch1_observations) - min(ch1_observations)) if ch1_observations else None,
         "candidate_word0_count": len(candidate_word0),
         "candidate_word0_min": min(candidate_word0) if candidate_word0 else None,
         "candidate_word0_max": max(candidate_word0) if candidate_word0 else None,
@@ -352,6 +364,8 @@ def main() -> int:
                 f"steady_bytes={row['raw_bytes']} u12_words={row['observational_le_u12_words']} "
                 f"candidate_4B_rows={row['candidate_4byte_rows']} "
                 f"candidate_rows/s={row['candidate_4byte_row_throughput_per_s']:.3f} "
+                f"ch1_obs={row['decoded_ch1_observation_count']} "
+                f"ch1_obs/s={row['decoded_ch1_observation_throughput_per_s']:.3f} "
                 f"tail={row['candidate_4byte_tail_bytes']}B oversize_ca={row['oversize_ca_packet_count']}"
             )
         except Exception as exc:
@@ -365,7 +379,7 @@ def main() -> int:
 
     out = args.output_dir / f"{stamp}_official-scan.json"
     out.write_text(json.dumps({
-        "format": "hantek1008c-official-scan-probe-v5",
+        "format": "hantek1008c-official-scan-probe-v6",
         "timestamp_utc": stamp,
         "canonical_acquisition_modified": False,
         "source_evidence": "official Windows USBPcap 2026-08-29",

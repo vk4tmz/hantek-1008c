@@ -11,8 +11,11 @@ from hantek1008c.scan_protocol import (
     decode_c9_available,
     le_u12_candidate_rows,
     le_u12_words,
+    scan_ch1_observations,
+    scan_observation_rate,
     trim_ca_packet,
 )
+from hantek1008c.scan_timing import estimate_reference_frequency
 
 
 def test_official_scan_profiles_match_windows_boundary_evidence():
@@ -109,3 +112,26 @@ def test_stateful_candidate_row_framer_preserves_capture_end_tail():
     assert framer.carry == bytes.fromhex("FF EE")
     assert framer.total_input_bytes == 6
     assert framer.total_rows == 1
+
+
+def test_official_scan_rows_flatten_to_temporal_ch1_observations():
+    rows = [(100, 101), (102, 103), (104, 105)]
+    assert scan_ch1_observations(rows) == [100, 101, 102, 103, 104, 105]
+
+
+def test_official_scan_observation_rate_is_twice_row_rate():
+    assert scan_observation_rate(398.170) == pytest.approx(796.340)
+    assert scan_observation_rate(0.0) == 0.0
+    with pytest.raises(ValueError):
+        scan_observation_rate(-1.0)
+
+
+def test_reference_frequency_estimator_tracks_known_sine():
+    import math
+    rate = 800.0
+    freq = 20.0
+    samples = [2000 + 100 * math.sin(2 * math.pi * freq * n / rate) for n in range(1600)]
+    estimated, period, intervals = estimate_reference_frequency(samples, rate)
+    assert estimated == pytest.approx(freq, rel=1e-6)
+    assert period == pytest.approx(40.0, rel=1e-6)
+    assert intervals > 30

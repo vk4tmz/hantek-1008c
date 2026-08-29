@@ -839,3 +839,29 @@ samplerates.  Canonical ROLL acquisition therefore remains unchanged.
 This result also establishes that identical 4-byte transport geometry does not
 imply identical row semantics: official C9/CA Scan and diagnostic C7/C8 ROLL
 must continue to be described and decoded independently.
+
+## Official Scan reference-path promotion (2026-08-29)
+
+The Python protocol/reference path now exposes the official `A4 01 + C9/CA`
+Scan row as two temporally ordered CH1 ADC-like observations.  The structural
+decode is exactly:
+
+`word0[n], word1[n], word0[n+1], word1[n+1], ...`
+
+No sample values are averaged, selected, smoothed, thresholded, interpolated,
+integrated, detrended, or otherwise waveform-processed.  The interpretation is
+specific to official C9/CA Scan and must not be reused for the distinct C7/C8
+ROLL row, whose word1 has independently been shown to have different semantics.
+
+`scan_ch1_observations()` implements the evidence-backed flattening and
+`scan_observation_rate()` reports two CH1 observations per measured 4-byte row.
+`probe_official_scan.py` now records the decoded CH1 observation count and
+observation throughput while retaining the row/word diagnostics for protocol
+inspection.
+
+A validation-only tool, `tools/analyze_scan_reference_tone.py`, checks a known
+periodic stimulus against the flattened observation stream.  It uses the known
+test signal only to validate timing and does not participate in acquisition or
+waveform reconstruction.  The previously captured 20 Hz ATR2x-USB datasets at
+A3=1A/1B/1C remain the intended hardware validation set before considering any
+production libsigrok C9/CA implementation.
