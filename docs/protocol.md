@@ -868,7 +868,7 @@ production libsigrok C9/CA implementation.
 
 ## Production handoff: official C9/CA Scan (2026-08-29)
 
-After grounded-input, cross-rate adjacency, C7/C8 control, and reference-tone timing validation, the libsigrok production driver now has an official Scan implementation limited to the eight independently validated settings:
+After grounded-input, cross-rate adjacency, C7/C8 control, and reference-tone timing validation, the libsigrok production driver now has an official Scan implementation limited to the nine independently validated settings:
 
 - A3=1A (official 500 ms/div): nominal 800 CH1 observations/s.
 - A3=1B (official 1 s/div): nominal 400 CH1 observations/s.
@@ -878,15 +878,22 @@ After grounded-input, cross-rate adjacency, C7/C8 control, and reference-tone ti
 - A3=1F (official 20 s/div): nominal 20 CH1 observations/s.
 - A3=20 (official 50 s/div): nominal 8 CH1 observations/s.
 - A3=21 (official 100 s/div): nominal 4 CH1 observations/s.
+- A3=22 (official 200 s/div): nominal 2 CH1 observations/s.
 
 The production Scan path follows the same evidence-backed structural decode as this Python reference: stateful 4-byte framing across C9/CA transaction boundaries and temporal emission order `word0[n], word1[n], word0[n+1], word1[n+1], ...`. It performs no smoothing, averaging, interpolation, thresholding, detrending, integration, or waveform-specific reconstruction.
 
-The C7/C8 ROLL path remains deliberately separate and word0-only at its existing
-samplerates.
+The C7/C8 ROLL path remains deliberately separate and word0-only. At the shared
+public 2 Sa/s rate, the validated official Scan mapping now takes precedence;
+the ROLL implementation remains intact but is no longer selected at 2 Sa/s.
+The historical diagnostic ROLL rates `1, 5, 9, 23, 50, 100, 201, 401 Sa/s` are
+also omitted from libsigrok's advertised PulseView list to avoid presenting two
+rate families for the same official Scan timebase region. The retained public
+non-Scan rates are 1003 and 2006 Sa/s in the official Trigger region and the two
+validated BURST rates.
 
-### Production hardware validation: A3=1A through A3=21
+### Production hardware validation: A3=1A through A3=22
 
-Official C9/CA Scan has now passed real-hardware validation at all eight exposed
+Official C9/CA Scan has now passed real-hardware validation at all nine exposed
 production settings:
 
 - A3=1A: 800 Sa/s (official 500 ms/div).
@@ -897,6 +904,7 @@ production settings:
 - A3=1F: 20 Sa/s (official 20 s/div).
 - A3=20: 8 Sa/s (official 50 s/div).
 - A3=21: 4 Sa/s (official 100 s/div).
+- A3=22: 2 Sa/s (official 200 s/div).
 
 Both `sigrok-cli` and PulseView reproduced the ATR2x-USB audio reference at each
 setting: 20 Hz for A3=1A through 1D and 1 Hz for A3=1E through 21. At A3=1D,
@@ -920,6 +928,20 @@ Production `sigrok-cli` then delivered exactly 800, 400, 160, and 80 samples at
 at 40 and 20 Sa/s, a visibly coarse trace at 8 Sa/s, and the expected repeating
 roughly triangular four-samples-per-cycle trace at 4 Sa/s. The latter validates
 cadence and periodicity, not high-fidelity waveform shape.
+
+For A3=22, a 60-second Python-first capture measured 1.899987 observations/s
+and recovered a 0.2 Hz ATR2x-USB reference at 0.189999 Hz with an exact median
+period of 10 observations. Valid CA padding, no oversize C9 event, and the
+observed two-byte capture-end carry were preserved. The grounded control had a
+four-count span, population standard deviation 0.7115 count, and similar
+within-row/across-row mean absolute changes of 0.7407/0.7692 count.
+
+The production selection was then changed from diagnostic `A3=21` ROLL to
+official `A3=22` Scan at the public 2 Sa/s setting. A production `sigrok-cli`
+capture delivered exactly 120 samples and recovered 0.200244 Hz. PulseView
+showed the expected approximately ten-sample-per-cycle sine after its display
+scale was manually changed from the initial 20 V/div to 2 V/div; that visual
+scale change did not alter acquisition data or cadence.
 
 ### A3=1D Python-first Scan validation
 
