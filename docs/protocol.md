@@ -865,3 +865,15 @@ test signal only to validate timing and does not participate in acquisition or
 waveform reconstruction.  The previously captured 20 Hz ATR2x-USB datasets at
 A3=1A/1B/1C remain the intended hardware validation set before considering any
 production libsigrok C9/CA implementation.
+
+## Production handoff: official C9/CA Scan (2026-08-29)
+
+After grounded-input, 20 Hz cross-rate adjacency, C7/C8 control, and reference-tone timing validation, the libsigrok production driver now has an initial official Scan implementation limited to the three independently validated settings:
+
+- A3=1A (official 500 ms/div): nominal 800 CH1 observations/s.
+- A3=1B (official 1 s/div): nominal 400 CH1 observations/s.
+- A3=1C (official 2 s/div): nominal 200 CH1 observations/s.
+
+The production Scan path follows the same evidence-backed structural decode as this Python reference: stateful 4-byte framing across C9/CA transaction boundaries and temporal emission order `word0[n], word1[n], word0[n+1], word1[n+1], ...`. It performs no smoothing, averaging, interpolation, thresholding, detrending, integration, or waveform-specific reconstruction.
+
+The C7/C8 ROLL path remains deliberately separate and word0-only at its existing samplerates. The production Scan implementation must be hardware-validated in sigrok-cli/PulseView before the Scan region is expanded beyond A3=1A..1C.
