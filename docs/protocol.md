@@ -992,6 +992,31 @@ fractional-rate profiles can be represented honestly (for example through
 timebase/sample-interval metadata where appropriate) rather than rounded or
 faked as integer `SR_CONF_SAMPLERATE` values.
 
+### Future viewer model for ultra-slow Scan: data logging / charting
+
+The A3=23..28 profiles are better described operationally as slow continuous
+data-logging or chart-recorder modes than as conventional oscilloscope sweep
+rates. Their native observation periods are approximately 1.25, 2.5, 5, 12.5,
+25, and 50 seconds respectively. That makes them suitable for long-duration
+measurements such as battery charge/discharge, temperature or pressure trends,
+slow sensor drift, and intermittent faults where preserving the time history is
+more important than displaying a fast repetitive waveform.
+
+The current PulseView timing path is samplerate-oriented and uses integer
+`SR_CONF_SAMPLERATE` values as the normal stream timing basis. Therefore the
+sub-1-Hz Hantek profiles should not be exposed by rounding 0.8, 0.4, 0.2, 0.08,
+0.04, or 0.02 Sa/s into invented integer rates. A future generic PulseView
+enhancement could instead accept a precise sample period/interval as the timing
+basis for continuous analog data and render the result as a long-duration
+chart. The desired model is conceptually a rational sample period, so intervals
+such as 5/4 s, 5/2 s, and 25/2 s remain exact rather than being forced into
+integer-second or integer-Hz representations.
+
+This should be treated as a generic slow-instrument/viewer capability, not as a
+Hantek-specific UI mode. The existing PulseView samplerate presentation for the
+currently supported A3=1A..22 profiles remains appropriate and should not be
+changed merely to mimic the Windows application's time/div selector.
+
 ### A3=1D Python-first Scan validation
 
 The next official Scan setting, A3=1D (5 s/div), has now completed its
