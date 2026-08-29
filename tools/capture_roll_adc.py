@@ -8,10 +8,11 @@ function.  It follows the already validated ROLL transport sequence:
     F3, C7 -> available byte count
     C8 -> 64-byte packets
 
-For the validated CH1-only ROLL layout each row is four bytes: one little-endian
-12-bit CH1 ADC word followed by one extra device word.  The extra lane is
-preserved in the raw transport file and reported separately; it is not treated
-as waveform data.
+For the validated CH1-only ROLL layout each row is four bytes containing two
+little-endian words.  Historical diagnostics emitted only word0 as CH1 and
+called word1 an extra device word.  New official C9/CA Scan evidence shows that
+both positions can be ADC-like, so this capture preserves and reports both
+ROLL words neutrally.  It does not assign temporal semantics to word1.
 
 No smoothing, interpolation, thresholding, detrending, waveform recognition, or
 voltage conversion is performed.
@@ -83,12 +84,12 @@ def decode_roll_rows(raw: bytes) -> tuple[list[int], list[int]]:
         raise HantekUSBError(
             f"ROLL payload is {len(raw)} bytes; expected CH1+extra 4-byte rows"
         )
-    ch1: list[int] = []
-    extra: list[int] = []
+    word0: list[int] = []
+    word1: list[int] = []
     for i in range(0, len(raw), 4):
-        ch1.append(int.from_bytes(raw[i:i + 2], "little") & 0x0FFF)
-        extra.append(int.from_bytes(raw[i + 2:i + 4], "little"))
-    return ch1, extra
+        word0.append(int.from_bytes(raw[i:i + 2], "little") & 0x0FFF)
+        word1.append(int.from_bytes(raw[i + 2:i + 4], "little") & 0x0FFF)
+    return word0, word1
 
 
 def main() -> int:
@@ -178,7 +179,7 @@ def main() -> int:
         return 4
 
     raw_transport = b"".join(chunks)
-    ch1, extra = decode_roll_rows(raw_transport)
+    ch1, word1 = decode_roll_rows(raw_transport)
     if len(ch1) < args.samples:
         print(
             f"ERROR: collected only {len(ch1)} rows before {args.capture_timeout_s:.3f}s timeout",
@@ -209,7 +210,8 @@ def main() -> int:
         "drained_rows": len(ch1),
         "selected_samples": len(selected),
         "raw_word_summary": summary(selected),
-        "extra_lane_summary": summary(extra),
+        "word1_u12_summary": summary(word1),
+        "extra_lane_summary": summary(word1),
         "startup_calibration": startup_calibration,
         "c7_polls": c7_rows,
         "roll_transport_file": str(raw_path),
@@ -217,7 +219,10 @@ def main() -> int:
         "transaction_log": str(txlog),
         "notes": [
             "ROLL path uses A4 02 plus C7/C8 and does not poll burst-ready A5.",
-            "CH1 is the first 16-bit word of each validated 4-byte ROLL row.",
+            "Historical ROLL decoding emits word0 of each 4-byte row as CH1.",
+            "Both 16-bit row positions are preserved and reported neutrally for word-order analysis.",
+            "extra_lane_summary is retained as a compatibility alias of word1_u12_summary.",
+            "No temporal meaning is assigned to word1 by this capture tool.",
             "No voltage conversion or waveform-specific processing was applied.",
         ],
     }

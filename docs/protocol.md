@@ -759,3 +759,83 @@ against independent timing evidence.
 
 `tools/analyze_scan_word_order.py` reports these alternating-boundary metrics
 without waveform-dependent thresholds or automatic semantic classification.
+
+## Scan temporal-order cross-rate evidence (2026-08-29)
+
+A follow-up controlled-input experiment strengthened the interpretation of the
+official `A4 01 + C9/CA` Scan 4-byte candidate row.  With CH1 grounded, A3=1A,
+1B and 1C all showed the same sub-count-scale continuity across every adjacency
+class (`word0->word1`, `word1->next-word0`, and same-position row steps), with
+no persistent offset, inversion or separate value population between the two
+word positions.  This is strong evidence that both words are measurements of
+the same analogue input path rather than one sample plus unrelated metadata.
+
+With CH1 driven by a 20 Hz sine through the ATR2x-USB audio output, the three
+Scan rates gave the following mean absolute deltas:
+
+- A3=1A, 398.170 rows/s: within 2.3285, across 2.3306, word0 row-step 4.4887,
+  word1 row-step 4.5107 counts.
+- A3=1B, 198.993 rows/s: within 4.4623, across 4.5069, word0 row-step 8.8793,
+  word1 row-step 8.7044 counts.
+- A3=1C, 99.124 rows/s: within 8.8992, across 8.8384, word0 row-step 16.3737,
+  word1 row-step 16.4242 counts.
+
+The alternating-boundary ratios (`across/within`) were 1.0009, 1.0100 and
+0.9932 respectively.  Same-position row steps were approximately twice the
+adjacent-word movement at all three rates.  This is strong waveform-agnostic
+protocol evidence consistent with the temporal sequence
+`word0[n], word1[n], word0[n+1], word1[n+1], ...` in official Scan mode.
+The corresponding observation cadences are therefore approximately twice the
+4-byte-row cadences (~796.3, ~398.0 and ~198.2 observations/s), but this
+interpretation is still confined to the official C9/CA Scan transport until the
+separate diagnostic C7/C8 ROLL transport is cross-checked directly.
+
+`tools/analyze_roll_word_order.py` is provided for that C7/C8 cross-check.  It
+reads the raw transport saved by `tools/capture_roll_adc.py`, treats both
+16-bit row positions neutrally as 12-bit observations, and reports exactly the
+same alternating-boundary metrics.  No canonical acquisition or reconstruction
+path is changed by this diagnostic.
+
+## C7/C8 ROLL word-role cross-check (2026-08-29)
+
+The separate diagnostic `A4 02 + C7/C8` ROLL transport was tested directly so
+that the official C9/CA Scan interpretation would not be transferred to it by
+analogy.  Both 16-bit positions of each raw 4-byte ROLL row were preserved and
+analysed with the same waveform-agnostic adjacency metrics used for Scan.
+
+With CH1 driven from the ATR2x-USB output by a 20 Hz sine, the two row positions
+behaved very differently:
+
+- A3=1A (historical row rate 401/s): word0 row-step mean 30.0287 counts,
+  word1 row-step mean 0.93375 counts.
+- A3=1B (201/s): word0 row-step mean 59.6008 counts, word1 row-step mean
+  1.19399 counts.
+- A3=1C (100/s): word0 row-step mean 113.07 counts, word1 row-step mean
+  1.6775 counts.
+
+The changing word0 step grows as the row interval grows, as expected for the
+same analogue waveform observed progressively more slowly.  In contrast,
+word1 remains almost static.  The alternating word0/word1 separation is also
+large and nearly rate-independent: mean absolute deltas are approximately
+259 counts for both `word0[n] -> word1[n]` and
+`word1[n] -> word0[n+1]` at all three A3 values.  This is not the structure
+seen in official C9/CA Scan mode and is inconsistent with interpreting the
+ROLL row as two consecutive CH1 observations.
+
+A grounded-CH1 control at A3=1A provides an independent check.  The production
+word0 lane collapsed to a 7-count span with a row-step mean of 0.6927 count.
+Word1 was likewise individually stable (row-step mean 0.6458 count), but the
+two positions remained separated by approximately 249 counts and had no useful
+cross-correlation.  Thus both row positions can be quiet numeric quantities,
+but they do not represent the same grounded ADC population.
+
+These measurements support the existing canonical C7/C8 ROLL interpretation:
+`word0` is the changing CH1 analogue observation used by the diagnostic ROLL
+path, while `word1` is a distinct, still-unidentified device quantity.  Do not
+call word1 metadata, status, or another channel without further evidence.  Do
+not emit it as a second CH1 sample and do not double the historical ROLL
+samplerates.  Canonical ROLL acquisition therefore remains unchanged.
+
+This result also establishes that identical 4-byte transport geometry does not
+imply identical row semantics: official C9/CA Scan and diagnostic C7/C8 ROLL
+must continue to be described and decoded independently.
