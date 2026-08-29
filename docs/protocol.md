@@ -943,6 +943,55 @@ showed the expected approximately ten-sample-per-cycle sine after its display
 scale was manually changed from the initial 20 V/div to 2 V/div; that visual
 scale change did not alter acquisition data or cadence.
 
+### Ultra-slow Scan protocol/cadence validation: A3=23 through A3=28 (2026-08-29)
+
+The remaining official Windows Scan profiles were exercised in the Python
+protocol/reference path through the end of the known horizontal table. A3=23
+used a 600-second capture; A3=24..28 were then run sequentially for 600, 900,
+1500, 2500, and 5000 seconds respectively. CH1 was connected to the ATR2x-USB
+audio output for these captures.
+
+The C9/CA transport remained structurally unchanged across every profile:
+
+| A3 | Official time/div | Nominal observation rate | Measured observation rate | Complete 4-byte rows | Final carry | Oversize CA |
+|---:|---:|---:|---:|---:|---:|---:|
+| `23` | 500 s/div | 0.8 Sa/s | 0.790 Sa/s | 237 | 2 B | 0 |
+| `24` | 1000 s/div | 0.4 Sa/s | 0.390 Sa/s | 117 | 2 B | 0 |
+| `25` | 2000 s/div | 0.2 Sa/s | 0.193 Sa/s | 87 | 2 B | 0 |
+| `26` | 5000 s/div | 0.08 Sa/s | 0.076 Sa/s | 57 | 2 B | 0 |
+| `27` | 10000 s/div | 0.04 Sa/s | 0.038 Sa/s | 47 | 2 B | 0 |
+| `28` | 20000 s/div | 0.02 Sa/s | 0.019 Sa/s | 47 | 2 B | 0 |
+
+In all six captures the first non-empty CA transaction carried a two-byte valid
+prefix and steady transactions thereafter carried four-byte valid prefixes.
+Padding was zero, no oversize CA transaction occurred, and byte accounting was
+exact. For example, A3=28 produced one 2-byte prefix followed by 47 four-byte
+prefixes: 190 bytes total, or 95 16-bit observations, represented at capture
+end as 47 complete rows plus the expected two-byte stateful carry.
+
+The regular four-byte CA arrival spacing progressed at approximately 2.5, 5,
+10, 25, 50, and 100 seconds for A3=23..28. Since each complete Scan row contains
+two temporally ordered observations, this corresponds to approximately 1.25,
+2.5, 5, 12.5, 25, and 50 seconds per observation. This is strong hardware
+evidence that A3=1A..28 form one continuous official C9/CA Scan family whose
+acquisition cadence extends below 1 Hz.
+
+The attempted 0.001 Hz reference waveform is deliberately **not** counted as
+waveform-frequency validation. The ATR2x-USB audio output did not deliver a
+meaningful near-DC sine at that frequency: the A3=28 ADC observations, for
+example, occupied only 2027..2037 (10-count span, population standard deviation
+approximately 2.34 counts) over the 5000-second run. The data therefore validate
+protocol framing and cadence, not reproduction of the intended 0.001 Hz tone.
+The quiet sequential differences remain consistent with the already-proven
+Scan temporal ordering and show no C7/C8-like split between the two words, but
+they are not used as new standalone proof of that interpretation.
+
+A grounded-CH1 control remains the next hardware check for A3=23..28. Production
+libsigrok support also remains intentionally limited to A3=1A..22 until the
+fractional-rate profiles can be represented honestly (for example through
+timebase/sample-interval metadata where appropriate) rather than rounded or
+faked as integer `SR_CONF_SAMPLERATE` values.
+
 ### A3=1D Python-first Scan validation
 
 The next official Scan setting, A3=1D (5 s/div), has now completed its
