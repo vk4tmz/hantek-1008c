@@ -674,3 +674,16 @@ excursions around the quiet code (~2001) and measures spacing between cluster
 centres.  This avoids coupling established timing results to the still
 experimental cumulative-delta waveform reconstruction, whose baseline can
 wander when the quiet-code estimate is biased by a fraction of a count.
+
+## Official Windows trigger-control evidence (2026-08-29)
+
+Targeted captures from the official Hantek application refine several previously unknown startup/configuration commands:
+
+- `AB hi lo` is the vertical trigger threshold, a big-endian 16-bit ADC-domain value.
+- `AC [u16] [u24] [u24]` carries horizontal acquisition-window/trigger-position information; the two u24 fields partition the total horizontal window.
+- `C1 00 xx` is the Edge-trigger slope/polarity control. A `+/-` toggle capture produced alternating `C1 00 01` / `C1 00 00` writes. Numeric polarity orientation remains deliberately unlabeled until transition ordering is proven unambiguously.
+- Trigger Sweep `Auto / Normal / Single` did not reveal a distinct new configuration opcode. Observed differences are consistent with host acquisition/re-arm policy; do not assign an unsupported sweep byte.
+- Official Trigger mode remains active through 200 ms/div (`A3 19`); official Scan Mode starts at 500 ms/div (`A3 1A`) and uses the `C9/CA` transfer family while `A4 01` remains in use. This is distinct from the project's diagnostic `A4 02 + C7/C8` ROLL path.
+
+The compressed USBPcap captures supporting these assignments are retained under `evidence/windows-usbpcap/20260829/`.
+
