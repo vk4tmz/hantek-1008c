@@ -150,9 +150,14 @@ requested time/div
     -> transport/acquisition mechanism (must be validated separately)
 ```
 
-The diagnostic `tools/probe_timebase_boundary.py` is intended to test the
-`A3=17/18` boundary under Linux without altering the canonical burst or ROLL
-paths.
+The earlier `tools/probe_timebase_boundary.py` experiment targeted the A3=17/18
+AC/timing discontinuity.  It must not be used as the official Trigger/Scan
+boundary test.  The proven GUI/transport boundary is A3=19 -> A3=1A.
+
+`tools/probe_official_scan.py` is the current Linux diagnostic for the official
+Scan Mode path.  It reproduces the evidence-derived `A3=1A/1B`, `A4 01`,
+`C9/CA` sequence while leaving both canonical direct-ADC BURST and the existing
+diagnostic `A4 02 + C7/C8` ROLL path untouched.
 
 ## Trigger position controls captured from the official application
 
@@ -257,3 +262,33 @@ edge trigger slope           -> C1 00 xx
 trigger sweep                -> Auto/Normal/Single re-arm behaviour; no dedicated opcode proven
 ```
 
+
+
+## C9 / CA byte-transfer semantics from the boundary capture
+
+Packet-level inspection of the dedicated Trigger/Scan boundary capture refines
+the C9/CA mechanism further.  In official Scan Mode the application repeatedly
+issues `C9`; the reply is exactly two bytes and behaves as a big-endian count
+of currently valid data bytes.  Observed counts in this capture were:
+
+```text
+0, 12, 14, 24, 26, 38, 40 bytes
+```
+
+When the count is non-zero, the application issues one `CA` request and receives
+a 64-byte USB packet.  The first `C9`-reported bytes carry data and the remainder
+of the packet is padding.  For example, `C9 -> 00 26` is followed by a 64-byte
+`CA` reply whose first 38 bytes are retained; `C9 -> 00 1A` similarly identifies
+26 valid bytes.  The evidence set contains no `C9` count above 40, so no
+multi-packet continuation rule is claimed.
+
+The official entry sequence around both A3=1A and A3=1B was also consistent:
+`A4 01`, `E4 01`, `E6 01`, `C0`, repeated `F3`/`A5` observation for about
+1.87 seconds, then `C2`, followed by `F3`/`A5` and `C9`/`CA` polling.  The
+~1.87-second interval is evidence-derived host behaviour, not yet promoted to a
+hardware requirement.
+
+`tools/probe_official_scan.py` deliberately preserves only the valid C9-sized
+prefix from each 64-byte CA packet and stores the raw bytes without waveform
+processing.  It refuses a C9 count above 64 rather than inventing an unobserved
+continuation protocol.

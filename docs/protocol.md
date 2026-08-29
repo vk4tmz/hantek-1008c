@@ -687,3 +687,35 @@ Targeted captures from the official Hantek application refine several previously
 
 The compressed USBPcap captures supporting these assignments are retained under `evidence/windows-usbpcap/20260829/`.
 
+
+
+## Official Scan Mode Linux diagnostic (2026-08-29)
+
+The Windows Trigger/Scan boundary capture proves that official Scan Mode starts
+at 500 ms/div (`A3=1A`) and uses `A4 01` with the `C9/CA` transfer family.
+Linux reproduction now refines the C9/CA model.
+
+At A3=1A, an initial C9 value of 2992 was followed by one 64-byte CA transaction
+and then C9=0.  Therefore C9 is **not** treated as a decrementing FIFO depth and
+values above 64 have no proven sample-length semantics.  They are quarantined.
+After startup, steady-state C9 values were 8, 10, 12, and 14 bytes.  In every
+such case the next CA reply was 64 bytes: exactly the C9-sized prefix was data
+and the rest was zero padding.  Immediate post-CA C9 was usually zero and once
+4; that observation is retained but is not used as a continuation rule.
+
+`tools/probe_official_scan.py` therefore keeps only C9<=64 prefixes in its
+steady-state raw sample artifact, writes C9>64 CA replies to a separate
+oversize-evidence artifact, verifies zero padding, records monotonic timing, and
+provides an observational little-endian 12-bit word view.  It performs no
+smoothing, thresholding, interpolation, integration, detrending, or waveform-
+specific processing.  `DirectADCSession.acquire_words()` and the diagnostic
+`A4 02 + C7/C8` ROLL path remain unchanged.
+
+### Official Scan C9/CA candidate row evidence (2026-08-29)
+
+Linux reproduction of the official Windows Scan path now shows a strong 4-byte
+logical cadence for CH1-only C9/CA payloads: A3=1A ~398 candidate rows/s,
+A3=1B ~199 rows/s, and A3=1C 99.717 rows/s.  The two little-endian 16-bit words
+inside each 4-byte candidate row remain semantically unnamed (`word0`, `word1`)
+until further evidence identifies their roles.  No canonical acquisition path
+uses either word yet.

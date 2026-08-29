@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Diagnostic-only A3/AC transport probe around the 17/18 timebase boundary.
+"""Legacy diagnostic-only A3/AC probe around the 17/18 timing boundary.
 
-The official Windows application capture on 2026-08-29 established a strong
-configuration boundary:
+IMPORTANT: this is *not* the official Trigger/Scan boundary probe.  Later
+Windows evidence established the actual Trigger -> Scan transition at
+A3=19 (200 ms/div) -> A3=1A (500 ms/div).  Use
+``tools/probe_official_scan.py`` for the C9/CA Scan Mode experiment.
+
+This older probe is retained only to investigate the separate A3=17/18 AC
+configuration discontinuity:
 
     50 ms/div  -> A3 17, AC 00 00 00 00 01 07 B0 A1
     100 ms/div -> A3 18, AC 00 00 00 00 01 00 00 01
@@ -218,7 +223,7 @@ def run_one(profile_name: str, transport: str, args, stamp: str) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="Diagnostic A3=17/18 + official-AC transport boundary probe"
+        description="Legacy diagnostic A3=17/18 AC/timing-boundary probe (not Trigger/Scan)"
     )
     p.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
     p.add_argument(
@@ -247,8 +252,8 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
-    print("Diagnostic only: canonical BURST/ROLL mappings are NOT modified.")
-    print("Exact A3+AC pairs come from the official Windows application capture.\n")
+    print("Legacy A3=17/18 AC/timing diagnostic; this is NOT the Trigger/Scan boundary.")
+    print("For official A3=1A/1B C9/CA Scan Mode use tools/probe_official_scan.py.\n")
 
     results = []
     for profile in profiles:
