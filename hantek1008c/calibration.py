@@ -7,7 +7,7 @@ shared by the Python reference tools and the libsigrok driver.
 from __future__ import annotations
 
 from configparser import ConfigParser
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import math
 import os
@@ -15,7 +15,7 @@ from pathlib import Path
 import statistics
 from typing import Iterable, Sequence
 
-from .vertical import reference_volts_per_delta_count
+from .vertical import nominal_volts_per_count
 
 FORMAT_VERSION = 1
 DEFAULT_ZERO_BURSTS = 3
@@ -53,6 +53,7 @@ class ZeroCalibration:
     samples: int
     volts_per_count: float
     calibrated_utc: str
+    scale_source: str = "reference_nominal_mfg92"
 
     @property
     def section(self) -> str:
@@ -106,6 +107,7 @@ def save_zero_calibration(cal: ZeroCalibration, path: Path | None = None) -> Pat
         "zero_max": str(cal.zero_max),
         "samples": str(cal.samples),
         "volts_per_count": f"{cal.volts_per_count:.12g}",
+        "scale_source": cal.scale_source,
         "calibrated_utc": cal.calibrated_utc,
     }
     for key, value in values.items():
@@ -185,6 +187,7 @@ def load_zero_calibration(
         samples=samples,
         volts_per_count=volts_per_count,
         calibrated_utc=parser.get(section, "calibrated_utc"),
+        scale_source=parser.get(section, "scale_source", fallback="legacy_unspecified"),
     )
 
 
@@ -208,8 +211,9 @@ def build_zero_calibration(
         zero_min=min(values),
         zero_max=max(values),
         samples=len(values),
-        volts_per_count=reference_volts_per_delta_count(range_id),
+        volts_per_count=nominal_volts_per_count(range_id),
         calibrated_utc=datetime.now(timezone.utc).isoformat(),
+        scale_source="reference_nominal_mfg92",
     )
 
 
@@ -224,6 +228,49 @@ def _quantile(values: Sequence[float], fraction: float) -> float:
         return ordered[lo]
     weight = pos - lo
     return ordered[lo] * (1.0 - weight) + ordered[hi] * weight
+
+
+
+def replace_voltage_scale(
+    cal: ZeroCalibration,
+    volts_per_count: float,
+    source: str,
+) -> ZeroCalibration:
+    """Return ``cal`` with an explicitly sourced voltage scale.
+
+    Zero calibration and voltage-scale calibration are deliberately separate:
+    changing the scale never changes the measured zero ADC offset.
+    """
+    scale = float(volts_per_count)
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError("volts_per_count must be finite and > 0")
+    if not source.strip():
+        raise ValueError("scale source must not be empty")
+    return replace(cal, volts_per_count=scale, scale_source=source.strip())
+
+
+def estimate_onboard_reference_scale(
+    frames: Iterable[Sequence[int]],
+    expected_vpp: float = 2.0,
+) -> tuple[float, float]:
+    """Estimate V/count from the nominal onboard square-wave reference.
+
+    This helper is validation/calibration-only.  It uses 10/90 percentiles to
+    estimate the two square-wave plateaux and is never part of canonical
+    acquisition or waveform reconstruction.  Returns ``(volts_per_count,
+    raw_plateau_span_counts)``.
+    """
+    if not math.isfinite(expected_vpp) or expected_vpp <= 0:
+        raise ValueError("expected_vpp must be finite and > 0")
+    all_words = [int(v) for frame in frames for v in frame]
+    if not all_words:
+        raise ValueError("reference scale estimation requires samples")
+    low = _quantile(all_words, 0.10)
+    high = _quantile(all_words, 0.90)
+    span = high - low
+    if span <= 0:
+        raise ValueError("reference plateau span must be > 0")
+    return expected_vpp / span, span
 
 
 def validate_onboard_reference(

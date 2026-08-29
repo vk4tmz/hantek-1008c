@@ -58,3 +58,28 @@ def test_reference_frequency_rejects_transition_ringing():
     result = validate_onboard_reference([frame], cal, 2_400_000.0)
     assert result.measured_frequency_hz == pytest.approx(1000.0, rel=0.01)
     assert result.passed
+
+
+def test_scale_provenance_and_explicit_replacement(tmp_path: Path):
+    from hantek1008c.calibration import replace_voltage_scale
+    path = tmp_path / "calibration.ini"
+    cal = build_zero_calibration("usb/1-2.3", 1, 2, [1996, 1997, 1996, 1998])
+    assert cal.scale_source == "reference_nominal_mfg92"
+    changed = replace_voltage_scale(cal, 0.001163467, "onboard_nominal_2Vpp_square")
+    assert changed.zero_adc == cal.zero_adc
+    assert changed.volts_per_count == pytest.approx(0.001163467)
+    assert changed.scale_source == "onboard_nominal_2Vpp_square"
+    save_zero_calibration(changed, path)
+    loaded = load_zero_calibration("usb/1-2.3", 1, 2, path)
+    assert loaded is not None
+    assert loaded.zero_adc == cal.zero_adc
+    assert loaded.volts_per_count == pytest.approx(0.001163467)
+    assert loaded.scale_source == "onboard_nominal_2Vpp_square"
+
+
+def test_onboard_reference_scale_estimator():
+    from hantek1008c.calibration import estimate_onboard_reference_scale
+    frame = ([2000] * 2000) + ([2200] * 2000)
+    scale, span = estimate_onboard_reference_scale([frame], expected_vpp=2.0)
+    assert span == pytest.approx(200.0)
+    assert scale == pytest.approx(0.01)

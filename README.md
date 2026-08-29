@@ -68,6 +68,14 @@ Transactions are logged as JSONL under `captures/`.
 
 ### Persistent zero calibration
 
+**Scale provenance:** zero offset and voltage scale are independent. A grounded
+zero calibration stores the mfg92-derived nominal V/count only as an explicitly
+labelled fallback (`scale_source=reference_nominal_mfg92`). Per-device scale
+measurements can replace that value without changing `zero_adc`; see
+`docs/a2-range-calibration.md`. A2 hardware range is not yet treated as a
+one-to-one user-facing V/div setting.
+
+
 The user-assisted calibration tool stores hardware calibration independently of
 PulseView or libsigrok under the XDG data directory (normally
 `~/.local/share/hantek-1008c/calibration.ini`). The current identity key is the
