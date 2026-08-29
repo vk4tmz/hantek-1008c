@@ -986,9 +986,33 @@ The quiet sequential differences remain consistent with the already-proven
 Scan temporal ordering and show no C7/C8-like split between the two words, but
 they are not used as new standalone proof of that interpretation.
 
-A grounded-CH1 control remains the next hardware check for A3=23..28. Production
-libsigrok support also remains intentionally limited to A3=1A..22 until the
-fractional-rate profiles can be represented honestly (for example through
+A second hardware campaign then exercised A3=23..28 with **CH1 grounded** for
+60, 90, 150, 300, 600, and 1200 seconds respectively. The grounded ADC remained
+quiet across all six profiles: observed spans were only 2--4 counts, population
+standard deviation was approximately 0.60--1.21 counts, and within-row versus
+across-row adjacent differences remained in the same sub-count-to-about-one-count
+noise regime. This provides a direct quiet-input control supporting the existing
+interpretation that Scan rows contain two consecutive CH1 observations rather
+than two different quantities.
+
+The grounded captures also measured the steady four-byte CA periods directly at
+approximately 2.5, 5, 10, 25, 50, and 100 seconds for A3=23..28. Because each
+steady CA carries two observations, these correspond exactly to 1.25, 2.5, 5,
+12.5, 25, and 50 seconds per observation, i.e. 0.8, 0.4, 0.2, 0.08, 0.04, and
+0.02 Sa/s. The shorter grounded captures initially appeared to be three rows
+short relative to duration, but raw timing shows this is a repeatable startup
+pipeline effect: the first partial observation becomes available only after
+roughly three steady CA periods. The steady-state cadence itself matches the
+nominal fractional rates.
+
+Framing remained exact in every grounded run: the first non-empty CA supplied a
+2-byte valid prefix, later CA transactions supplied 4-byte valid prefixes, CA
+padding was zero, no oversize CA occurred, and every capture ended with the
+expected 2-byte carry. Together with the long-duration campaign, this closes the
+hardware characterization of the official C9/CA Scan family through A3=28.
+
+Production libsigrok support remains intentionally limited to A3=1A..22 until
+the fractional-rate profiles can be represented honestly (for example through
 timebase/sample-interval metadata where appropriate) rather than rounded or
 faked as integer `SR_CONF_SAMPLERATE` values.
 
