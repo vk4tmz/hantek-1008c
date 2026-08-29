@@ -681,7 +681,7 @@ Targeted captures from the official Hantek application refine several previously
 
 - `AB hi lo` is the vertical trigger threshold, a big-endian 16-bit ADC-domain value.
 - `AC [u16] [u24] [u24]` carries horizontal acquisition-window/trigger-position information; the two u24 fields partition the total horizontal window.
-- `C1 00 xx` is the Edge-trigger slope/polarity control. A `+/-` toggle capture produced alternating `C1 00 01` / `C1 00 00` writes. Numeric polarity orientation remains deliberately unlabeled until transition ordering is proven unambiguously.
+- `C1 00 xx` is the Edge-trigger slope/polarity control. Correlation against the recorded Windows UI chronology (`+ -> - -> + -> - ... -> +`) proves `C1 00 00` = `+` / rising and `C1 00 01` = `-` / falling.
 - Trigger Sweep `Auto / Normal / Single` did not reveal a distinct new configuration opcode. Observed differences are consistent with host acquisition/re-arm policy; do not assign an unsupported sweep byte.
 - Official Trigger mode remains active through 200 ms/div (`A3 19`); official Scan Mode starts at 500 ms/div (`A3 1A`) and uses the `C9/CA` transfer family while `A4 01` remains in use. This is distinct from the project's diagnostic `A4 02 + C7/C8` ROLL path.
 
@@ -1063,3 +1063,54 @@ production Scan mapping for A3=1D while preserving the separate existing
 50 Sa/s C7/C8 ROLL mapping at the same A3 selector.
 
 Existing C7/C8 ROLL and C6/A6 BURST behaviour remain separate and unchanged.
+
+## Linux hardware-trigger validation and frontend policy
+
+Windows USBPcap evidence plus controlled Linux tests now establish the Trigger
+state machine sufficiently for canonical use.  `AB hi lo` is the big-endian
+16-bit ADC-domain trigger threshold, and the known Windows `+/-` toggle
+chronology resolves `C1 00 00` as `+` / rising and `C1 00 01` as `-` / falling.
+
+The decisive Linux arm sequence is:
+
+```text
+A4 01
+C0
+F3 / A5 5A polling
+```
+
+`C2` must **not** be sent immediately after `C0`.  With CH1 connected to a
+1 kHz square wave and `AB=0860`, six of six captures reached A5 ready state 2
+without C2, after approximately 112--126 ms.  With CH1 grounded and the same
+USB configuration, zero of four captures became ready during a 1.2 s wait.  A
+further grounded control remained in A5 state 0 for 10004.4 ms and completed
+only after the diagnostic sent C2.  This proves that C0 arms a genuine hardware
+trigger wait, A5 state 0 is the waiting state, A5 state 2 is a completed/ready
+state, and C2 is a forced-completion action rather than part of initial arming.
+
+The canonical Python direct-burst path therefore implements two frontend
+policies:
+
+- **Auto/free-running** (`trigger_enabled=False`): arm with C0, poll A5 for the
+  host-side Auto timeout (default 1870 ms, matching the observed official-app
+  cadence), then send C2 only if no genuine trigger completed the acquisition.
+- **Normal** (`trigger_enabled=True`): arm with C0 and poll A5 indefinitely.
+  There is no timeout C2.  Re-arming after a completed frame is a caller/frontend
+  policy.
+
+The official application also exposes **Single**, but no dedicated USB sweep
+selector has been proven.  Single is therefore retained as a host-side one-shot
+re-arm policy, not exposed as a distinct device command in the canonical Python
+API.
+
+For libsigrok/PulseView integration, do not invent a Hantek-specific
+Auto/Normal/Single control.  Existing frontend semantics map naturally: no
+frontend trigger configured -> Auto/free-running; a rising/falling trigger
+configured -> Normal-style indefinite hardware wait and re-arm while Run
+remains active.  Ordinary Run is not interpreted as Single.  Single remains a
+documented capability for possible future generic one-shot support.
+
+The 1 kHz square wave and grounded input are validation controls only.  No
+waveform-specific thresholding, alignment, smoothing, or reconstruction is
+introduced into the canonical sample path.
+

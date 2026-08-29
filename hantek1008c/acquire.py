@@ -117,27 +117,104 @@ def wait_ready(scope: Any, timeout_ms: int = 1000, tries: int = 100) -> int:
     return state
 
 
+def poll_ready_until(
+    scope: Any,
+    timeout_ms: int,
+    *,
+    poll_interval_ms: float = 15.0,
+    deadline_ms: float | None = None,
+    metrics: dict | None = None,
+) -> tuple[bool, int | None, int]:
+    """Poll F3/A5 until hardware reports ready.
+
+    ``deadline_ms=None`` implements Normal-style waiting: polling continues until
+    a genuine trigger completes the acquisition.  A finite deadline implements
+    Auto-style host policy: if the deadline expires the caller may force
+    completion with C2.
+    """
+    rows = []
+    started = time.perf_counter_ns()
+    deadline_ns = None if deadline_ms is None else started + int(deadline_ms * 1_000_000.0)
+    polls = 0
+    last_state = None
+
+    while True:
+        _transact(scope, b"\xF3", timeout_ms)
+        poll_started = time.perf_counter_ns()
+        reply = _transact(scope, bytes.fromhex("A5 5A"), timeout_ms)
+        poll_ended = time.perf_counter_ns()
+        polls += 1
+        state = reply[-1] if reply else None
+        last_state = int(state) if state is not None else None
+        if metrics is not None:
+            rows.append({
+                "poll": polls,
+                "state": last_state,
+                "elapsed_ms": (poll_ended - started) / 1_000_000.0,
+                "transaction_ms": (poll_ended - poll_started) / 1_000_000.0,
+            })
+        if state in (2, 3):
+            if metrics is not None:
+                metrics.update({
+                    "elapsed_ms": (poll_ended - started) / 1_000_000.0,
+                    "polls": rows,
+                    "ready_state": int(state),
+                    "timed_out": False,
+                })
+            return True, int(state), polls
+
+        now = time.perf_counter_ns()
+        if deadline_ns is not None and now >= deadline_ns:
+            if metrics is not None:
+                metrics.update({
+                    "elapsed_ms": (now - started) / 1_000_000.0,
+                    "polls": rows,
+                    "ready_state": None,
+                    "last_state": last_state,
+                    "timed_out": True,
+                })
+            return False, last_state, polls
+
+        if poll_interval_ms > 0:
+            time.sleep(poll_interval_ms / 1000.0)
+
+
 def acquire_direct_buffers(
     scope: Any,
     timeout_ms: int = 1000,
     *,
+    trigger_enabled: bool = False,
+    auto_timeout_ms: float = 1870.0,
+    poll_interval_ms: float = 15.0,
     arm_delay_s: float = 0.0,
     return_ready_info: bool = False,
     return_metrics: bool = False,
 ):
-    """Acquire one direct-ADC burst after full initialization.
+    """Acquire one direct-ADC burst using the proven trigger state machine.
 
-    ``arm_delay_s`` controls the historical fixed delay between A4 and C0/C2.
-    Hardware validation on 2026-08-28 (50-burst sweep, 100k-sample run, and
-    25-burst timing profile) established that no fixed delay is required: A5
-    readiness polling is the synchronization point. The canonical default is
-    therefore 0 seconds; nonzero values remain available for protocol labs.
+    The hardware is armed with A4 01 -> C0 and A5 is then polled.  C2 is *not*
+    part of initial arming.
 
-    With ``return_metrics=True`` the function also returns a timing dictionary
-    measured with ``perf_counter_ns()``. Timing collection is observational only
-    and does not alter or post-process captured samples.
+    ``trigger_enabled=False`` implements Auto/free-running frontend semantics:
+    wait for a genuine trigger until ``auto_timeout_ms`` expires, then send C2
+    to force completion.
+
+    ``trigger_enabled=True`` implements Normal frontend semantics: wait
+    indefinitely for genuine hardware readiness and never send a timeout C2.
+
+    ``arm_delay_s`` remains a protocol-lab control; validated canonical use is
+    zero seconds.  Single-shot is intentionally not represented here because
+    it is a frontend re-arm policy, not a different USB arm sequence.
     """
-    metrics = {"arm_delay_requested_ms": arm_delay_s * 1000.0} if return_metrics else None
+    if auto_timeout_ms < 0:
+        raise ValueError("auto_timeout_ms must be >= 0")
+    if poll_interval_ms < 0:
+        raise ValueError("poll_interval_ms must be >= 0")
+
+    metrics = {
+        "arm_delay_requested_ms": arm_delay_s * 1000.0,
+        "trigger_policy": "normal" if trigger_enabled else "auto",
+    } if return_metrics else None
     total_start = time.perf_counter_ns()
 
     def tx_timed(name: str, payload: bytes) -> bytes:
@@ -147,9 +224,6 @@ def acquire_direct_buffers(
         if metrics is not None:
             metrics[name] = (ended - started) / 1_000_000.0
             if name == "a4_ms":
-                # Absolute monotonic timestamp for gap-aware protocol labs.
-                # This is observational only and deliberately not used by the
-                # canonical sample path.
                 metrics["a4_start_ns"] = started
                 metrics["a4_end_ns"] = ended
         return reply
@@ -166,15 +240,40 @@ def acquire_direct_buffers(
             metrics["arm_delay_actual_ms"] = (delay_end - delay_start) / 1_000_000.0
     elif metrics is not None:
         metrics["arm_delay_actual_ms"] = 0.0
+
     tx_timed("c0_ms", b"\xC0")
-    tx_timed("c2_ms", b"\xC2")
 
     a5_metrics = {} if metrics is not None else None
-    ready_state, ready_polls = wait_ready_with_polls(
-        scope, timeout_ms, metrics=a5_metrics
+    ready, ready_state, ready_polls = poll_ready_until(
+        scope,
+        timeout_ms,
+        poll_interval_ms=poll_interval_ms,
+        deadline_ms=None if trigger_enabled else auto_timeout_ms,
+        metrics=a5_metrics,
     )
+    forced = False
+    if not ready:
+        if trigger_enabled:
+            raise _usb_error("Normal trigger wait ended without hardware readiness")
+        forced = True
+        tx_timed("c2_ms", b"\xC2")
+        cleanup_metrics = {} if metrics is not None else None
+        ready, ready_state, cleanup_polls = poll_ready_until(
+            scope,
+            timeout_ms,
+            poll_interval_ms=poll_interval_ms,
+            deadline_ms=max(1800.0, float(timeout_ms)),
+            metrics=cleanup_metrics,
+        )
+        ready_polls += cleanup_polls
+        if metrics is not None:
+            metrics["a5_after_c2"] = cleanup_metrics
+        if not ready:
+            raise _usb_error("C2 forced completion did not reach A5 ready state 2/3")
+
     if metrics is not None:
         metrics["a5"] = a5_metrics
+        metrics["forced_completion"] = forced
 
     b2_metrics = {} if metrics is not None else None
     b2 = _query_buffer(scope, 2, timeout_ms, metrics=b2_metrics)
@@ -200,7 +299,6 @@ def acquire_direct_buffers(
         return b2, b3, ready_state, ready_polls
     return b2, b3
 
-
 def decode_direct_u12(buffers: Tuple[bytes, bytes]) -> List[int]:
     raw = buffers[0] + buffers[1]
     return [
@@ -215,6 +313,11 @@ class DirectADCConfig:
     a3: int = 0x0F
     range_id: int = 0x03
     timeout_ms: int = 1000
+    trigger_enabled: bool = False
+    trigger_slope_raw: int = 0x00
+    trigger_level_adc: int = 0x0800
+    auto_timeout_ms: float = 1870.0
+    trigger_poll_interval_ms: float = 15.0
 
     @property
     def sample_rate(self) -> float:
@@ -298,17 +401,50 @@ class DirectADCSession:
         self._tx(bytes([0xAA] + aa))
         self._tx(bytes([0xA2] + [c.range_id] * 8))
         self._tx(bytes([0xA3, c.a3]))
-        self._tx(bytes.fromhex("C1 00 00"))
+        self.set_trigger_slope_raw(c.trigger_slope_raw)
         self._tx(bytes.fromhex("A7 00 00"))
         self._tx(bytes.fromhex("AC 00 00 00 00 01 00 05 79"))
-        self._tx(bytes.fromhex("AB 08 00"))
+        self.set_trigger_level_adc(c.trigger_level_adc)
         self._tx(b"\xE9")
 
         self.calibration = calibration
         self.initialized = True
         return calibration
 
+    def set_trigger_slope_raw(self, value: int) -> None:
+        """Set the proven C1 edge-trigger selector.
+
+        Windows UI chronology proves C1 00 00 = ``+`` / rising and
+        C1 00 01 = ``-`` / falling.  The raw setter remains useful for
+        protocol-lab correlation tools.
+        """
+        if value not in (0, 1):
+            raise ValueError("trigger_slope_raw must be 0 or 1")
+        self._tx(bytes([0xC1, 0x00, value]))
+        self.config.trigger_slope_raw = value
+
+    def set_trigger_slope(self, slope: str) -> None:
+        """Set edge trigger slope by proven frontend meaning."""
+        normalized = slope.strip().lower()
+        mapping = {"rising": 0, "+": 0, "falling": 1, "-": 1}
+        if normalized not in mapping:
+            raise ValueError("trigger slope must be rising/+ or falling/-")
+        self.set_trigger_slope_raw(mapping[normalized])
+
+    def set_trigger_level_adc(self, value: int) -> None:
+        """Set AB as the proven big-endian 16-bit ADC-domain trigger level."""
+        if not 0 <= value <= 0xFFFF:
+            raise ValueError("trigger_level_adc must be 0..65535")
+        self._tx(bytes([0xAB, (value >> 8) & 0xFF, value & 0xFF]))
+        self.config.trigger_level_adc = value
+
     def acquire_words(self) -> List[int]:
         if not self.initialized:
             raise _usb_error("DirectADCSession.initialize() must be called first")
-        return decode_direct_u12(acquire_direct_buffers(self.scope, self.config.timeout_ms))
+        return decode_direct_u12(acquire_direct_buffers(
+            self.scope,
+            self.config.timeout_ms,
+            trigger_enabled=self.config.trigger_enabled,
+            auto_timeout_ms=self.config.auto_timeout_ms,
+            poll_interval_ms=self.config.trigger_poll_interval_ms,
+        ))
