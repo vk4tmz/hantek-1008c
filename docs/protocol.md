@@ -719,3 +719,43 @@ A3=1B ~199 rows/s, and A3=1C 99.717 rows/s.  The two little-endian 16-bit words
 inside each 4-byte candidate row remain semantically unnamed (`word0`, `word1`)
 until further evidence identifies their roles.  No canonical acquisition path
 uses either word yet.
+
+## AC A/B check at A3=11 (2026-08-29)
+
+A controlled Python BURST experiment compared the project's historical final
+`AC 00 00 00 00 01 00 05 79` (`0,1,1401`) with the official Windows A3=11
+value `AC 00 00 00 00 01 00 13 89` (`0,1,5001`).  All other acquisition
+settings were held constant: CH1 only, A3=11, A2=03, A4=01 and the same
+reference guards.
+
+Both settings reached A5 ready state normally and produced identical physical
+buffer geometry: buffer 02 empty, buffer 03 exactly 8000 bytes, 125 x 64-byte
+A6 reads, zero discarded tail.  This proves that the official AC value is
+accepted, but it does **not** demonstrate a production benefit or establish
+that samplerate-driven BURST must mirror the official application's horizontal
+window mapping.  Do not change canonical AC programming from this experiment
+alone.
+
+## Scan candidate-row adjacency evidence (2026-08-29)
+
+The neutral 4-byte Scan row model can be tested without assuming any waveform
+shape by comparing the two alternating boundaries in the raw word stream:
+`word0[n] -> word1[n]` and `word1[n] -> word0[n+1]`.
+
+For the preserved A3=1C capture (`20260829T054750Z`), the within-row mean
+absolute delta is 1.096 ADC counts and the across-row-boundary mean absolute
+delta is 1.000 count.  Their medians are 1 and 0 respectively; 368/396
+within-row deltas and 362/395 across-row deltas are <=1 count.  Correlation is
+~0.99847 for `word0[n],word1[n]` and ~0.99912 for
+`word1[n],word0[n+1]`.
+
+The lack of a discontinuity at the 4-byte row boundary is evidence consistent
+with `word0,word1` being an interleaved sequence of consecutive ADC-like
+observations rather than a same-time value plus unrelated metadata.  It is not
+yet sufficient to promote two samples per row into canonical acquisition: the
+result must be repeated across multiple A3 values and a sufficiently varying
+input, and the resulting effective sample-rate interpretation must be checked
+against independent timing evidence.
+
+`tools/analyze_scan_word_order.py` reports these alternating-boundary metrics
+without waveform-dependent thresholds or automatic semantic classification.
