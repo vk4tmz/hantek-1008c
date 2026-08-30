@@ -1213,3 +1213,23 @@ instead of assuming a fixed Dev address.
 The compressed captures supporting these 2026-08-30 findings are retained under
 `evidence/windows-usbpcap/20260830/`, with provenance in `README.md` and hashes
 in `SHA256SUMS.txt`.
+
+### Linux/Python multi-channel geometry validation plan (2026-08-30)
+
+The official-Windows width table (1,2,4,4,6,6,8,8 for 1..8 explicitly
+selected channels) is evidence, not yet a hardware architecture claim.  The
+Python protocol laboratory therefore tests A0 and AA independently at the odd
+3/5/7 boundaries instead of baking the Windows interpretation into the
+canonical acquisition API.  `tools/probe_multichannel_samplerate.py` records
+raw frames for the four A0/AA combinations (logical/logical, width/logical,
+logical/width, width/width), the full 1..8 Windows-width matrix, and selected
+sparse masks.  Every raw frame is retained and scored under all 1..8 candidate
+interleave widths.
+
+Known reference frequencies are used only to measure timing from the raw
+samples.  They are never used to filter, threshold, flatten, repair, smooth, or
+reconstruct captured data.  The 3/5/7 partner-channel tests are separate so a
+distinctive physical signal can be moved to CH4, CH6, and CH8 and establish
+whether the extra acquisition lane is the adjacent ADC input or padding/internal
+state.  Results from these experiments must be promoted into the canonical
+Python path and libsigrok only after hardware validation.
