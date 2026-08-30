@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-# Hantek burst-mode A3 uses a 1-2-5 time/div ladder. 0x11 is 500 us/div.
+# Hantek triggered-mode A3 uses a 1-2-5 time/div ladder. 0x11 is 500 us/div.
 # These adjacent faster values are known-valid members of that ladder.
 DEFAULT_A3 = [0x11, 0x10, 0x0F, 0x0E]
 A3_NS_PER_DIV = {
@@ -35,7 +35,7 @@ def parse_hex_byte(s: str) -> int:
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Capture CH1-only bursts while stepping known-valid A3 timebase values."
+        description="Capture CH1-only triggered_acquisitions while stepping known-valid A3 timebase values."
     )
     p.add_argument(
         "--a3-values",

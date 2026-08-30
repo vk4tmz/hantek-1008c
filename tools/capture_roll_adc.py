@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Diagnostic-only raw ADC capture for the Hantek 1008C ROLL path.
 
-This intentionally does not modify or reuse the canonical burst acquisition
+This intentionally does not modify or reuse the canonical Triggered acquisition
 function.  It follows the already validated ROLL transport sequence:
 
     A3 <rate-id>, settle, F3, A4 02, C0, C2
@@ -33,7 +33,7 @@ from hantek1008c.acquire import DirectADCConfig, DirectADCSession, _transact
 
 
 # Validated ROLL mappings live here deliberately rather than in the canonical
-# DirectADCConfig burst-rate table.
+# DirectADCConfig triggered-rate table.
 ROLL_SAMPLE_RATES = {
     0x22: 1.0,
     0x21: 2.0,
@@ -218,7 +218,7 @@ def main() -> int:
         "ch1_u12_file": str(ch1_path),
         "transaction_log": str(txlog),
         "notes": [
-            "ROLL path uses A4 02 plus C7/C8 and does not poll burst-ready A5.",
+            "ROLL path uses A4 02 plus C7/C8 and does not poll triggered-ready A5.",
             "Historical ROLL decoding emits word0 of each 4-byte row as CH1.",
             "Both 16-bit row positions are preserved and reported neutrally for word-order analysis.",
             "extra_lane_summary is retained as a compatibility alias of word1_u12_summary.",

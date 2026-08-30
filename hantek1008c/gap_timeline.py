@@ -7,8 +7,8 @@ from typing import Iterable, Sequence
 
 
 @dataclass(frozen=True)
-class GapTimelineBurst:
-    burst: int
+class GapTimelineTriggered:
+    triggered: int
     start_s: float
     end_s: float
     sample_count: int
@@ -18,54 +18,54 @@ class GapTimelineBurst:
 
 
 def build_gap_timeline(
-    bursts: Sequence[Sequence[int]],
-    burst_start_s: Sequence[float],
+    triggered_acquisitions: Sequence[Sequence[int]],
+    triggered_start_s: Sequence[float],
     sample_rate_hz: float,
 ):
     """Build a gap-aware timeline from measured acquisition start times.
 
-    ``burst_start_s`` is the monotonic start time of each hardware acquisition,
+    ``triggered_start_s`` is the monotonic start time of each hardware acquisition,
     normalized or absolute. Real ADC samples are placed at 1/sample_rate_hz
     starting at that measured time. Missing time is therefore derived only from
     the interval between successive acquisition starts; no samples are invented.
 
-    A single NaN marker is inserted between bursts when a positive gap exists so
+    A single NaN marker is inserted between triggered_acquisitions when a positive gap exists so
     ordinary plotting does not draw a false edge across missing time. No gap is
-    inferred after the final burst because there is no following acquisition
+    inferred after the final triggered because there is no following acquisition
     start with which to measure it.
     """
     if sample_rate_hz <= 0:
         raise ValueError("sample_rate_hz must be positive")
-    if len(bursts) != len(burst_start_s):
-        raise ValueError("bursts and burst_start_s must have equal length")
-    if any(b < a for a, b in zip(burst_start_s, burst_start_s[1:])):
-        raise ValueError("burst_start_s must be monotonic")
+    if len(triggered_acquisitions) != len(triggered_start_s):
+        raise ValueError("triggered_acquisitions and triggered_start_s must have equal length")
+    if any(b < a for a, b in zip(triggered_start_s, triggered_start_s[1:])):
+        raise ValueError("triggered_start_s must be monotonic")
 
     times: list[float] = []
     values: list[float] = []
-    rows: list[GapTimelineBurst] = []
+    rows: list[GapTimelineTriggered] = []
     dt = 1.0 / sample_rate_hz
-    origin = burst_start_s[0] if burst_start_s else 0.0
+    origin = triggered_start_s[0] if triggered_start_s else 0.0
 
-    for index, samples in enumerate(bursts):
+    for index, samples in enumerate(triggered_acquisitions):
         n = len(samples)
         sample_duration_s = n * dt
-        start_s = burst_start_s[index] - origin
+        start_s = triggered_start_s[index] - origin
         for i, value in enumerate(samples):
             times.append(start_s + i * dt)
             values.append(float(value))
         end_s = start_s + sample_duration_s
 
-        if index + 1 < len(bursts):
-            next_start_s = burst_start_s[index + 1] - origin
+        if index + 1 < len(triggered_acquisitions):
+            next_start_s = triggered_start_s[index + 1] - origin
             start_to_start_s = next_start_s - start_s
             gap_after_s = max(0.0, start_to_start_s - sample_duration_s)
         else:
             start_to_start_s = sample_duration_s
             gap_after_s = 0.0
 
-        rows.append(GapTimelineBurst(
-            burst=index + 1,
+        rows.append(GapTimelineTriggered(
+            triggered=index + 1,
             start_s=start_s,
             end_s=end_s,
             sample_count=n,
@@ -80,14 +80,14 @@ def build_gap_timeline(
     return times, values, rows
 
 
-def estimate_square_frequency_per_burst(
+def estimate_square_frequency_per_triggered_acquisition(
     samples: Sequence[int], sample_rate_hz: float
 ) -> tuple[float | None, int]:
     """Validation-only square frequency estimate using Schmitt crossings.
 
     This helper is intentionally outside the canonical acquisition/reconstruction
     path. It uses the known square-wave test source only to validate time-base
-    preservation within individual real hardware bursts.
+    preservation within individual real hardware triggered_acquisitions.
     """
     if len(samples) < 4:
         return None, 0

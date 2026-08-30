@@ -204,12 +204,12 @@ def main() -> int:
         f = row["first"]
         s = row["second"]
         print(
-            f"burst 1: A5={f['readiness']['ready_state']}/{f['readiness']['ready_polls']} polls "
+            f"triggered 1: A5={f['readiness']['ready_state']}/{f['readiness']['ready_polls']} polls "
             f"buffer03={f['buffer03_reported_bytes']} B pre-read={f['buffer03_pre_rearm_bytes']} B "
             f"unread~={f['buffer03_unread_bytes_estimate']} B"
         )
         print(
-            f"burst 2: A5={s['readiness']['ready_state']}/{s['readiness']['ready_polls']} polls "
+            f"triggered 2: A5={s['readiness']['ready_state']}/{s['readiness']['ready_polls']} polls "
             f"buffer03={s['buffer03_reported_bytes']} B returned={s['buffer03_returned_bytes']} B"
         )
         print()

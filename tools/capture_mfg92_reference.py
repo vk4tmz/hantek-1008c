@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experimental Hantek 1008C capture following mfg92/hantek1008py burst init.
+"""Experimental Hantek 1008C capture following mfg92/hantek1008py triggered init.
 
 This is deliberately separate from capture_buffers.py.  It exists to answer one
 question: does the fuller public-reference initialization make buffers 02+03
@@ -59,27 +59,27 @@ def a5_ready(scope, timeout=1000, tries=20):
     raise HantekUSBError(f'A5 never reached ready state 2/3 in {tries} polls')
 
 
-def burst(scope, timeout=1000, guards=True):
-    tx(scope,'BURST-F3',b'\xF3',timeout)
+def triggered(scope, timeout=1000, guards=True):
+    tx(scope,'TRIGGERED-F3',b'\xF3',timeout)
     if guards:
-        tx(scope,'BURST-E4-pre',bytes.fromhex('E4 01'),timeout)
-        tx(scope,'BURST-E6-pre',bytes.fromhex('E6 01'),timeout)
-    tx(scope,'BURST-A4',bytes.fromhex('A4 01'),timeout)
+        tx(scope,'TRIGGERED-E4-pre',bytes.fromhex('E4 01'),timeout)
+        tx(scope,'TRIGGERED-E6-pre',bytes.fromhex('E6 01'),timeout)
+    tx(scope,'TRIGGERED-A4',bytes.fromhex('A4 01'),timeout)
     time.sleep(0.015)
-    tx(scope,'BURST-C0',b'\xC0',timeout)
-    tx(scope,'BURST-C2',b'\xC2',timeout)
+    tx(scope,'TRIGGERED-C0',b'\xC0',timeout)
+    tx(scope,'TRIGGERED-C2',b'\xC2',timeout)
     a5_ready(scope,timeout)
     b2=c6a6(scope,2,timeout); b3=c6a6(scope,3,timeout)
     if guards:
-        tx(scope,'BURST-E4-post',bytes.fromhex('E4 01'),timeout)
-        tx(scope,'BURST-E6-post',bytes.fromhex('E6 01'),timeout)
+        tx(scope,'TRIGGERED-E4-post',bytes.fromhex('E4 01'),timeout)
+        tx(scope,'TRIGGERED-E6-post',bytes.fromhex('E6 01'),timeout)
     return b2,b3
 
 
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--a3',type=parse_byte,default=0x11,
-                    help='target final burst timebase byte; default 11 like mfg92 default')
+                    help='target final Triggered timebase byte; default 11 like mfg92 default')
     ap.add_argument('--range',dest='range_id',type=parse_byte,default=0x03)
     ap.add_argument('--timeout-ms',type=int,default=1000)
     ap.add_argument('--tag',default='mfg92-reference')
@@ -144,8 +144,8 @@ def main():
         tx(scope,'I3-AB-trigger',bytes.fromhex('AB 08 00'),timeout)
         tx(scope,'I3-E9',b'\xE9',timeout)
 
-        print('=== mfg92 burst ===')
-        b2,b3=burst(scope,timeout,guards=True)
+        print('=== mfg92 triggered ===')
+        b2,b3=triggered(scope,timeout,guards=True)
 
     (out/f'{base}_buffer02.bin').write_bytes(b2)
     (out/f'{base}_buffer03.bin').write_bytes(b3)

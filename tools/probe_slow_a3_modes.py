@@ -136,7 +136,7 @@ def run_mode(a3: int, args, stamp: str) -> dict:
         "a3": f"{a3:02X}",
         "sample_rate_hz": None,
         "sample_rate_status": "unvalidated-by-design",
-        "bursts": [],
+        "triggered_acquisitions": [],
     }
 
     with Hantek1008C() as scope:
@@ -146,14 +146,14 @@ def run_mode(a3: int, args, stamp: str) -> dict:
         DirectADCSession(scope, cfg).initialize()
 
         previous: bytes | None = None
-        for n in range(1, args.bursts + 1):
+        for n in range(1, args.triggered_acquisitions + 1):
             readiness = arm(scope, cfg.timeout_ms, args.max_polls)
-            burst = {"index": n, "readiness": readiness}
+            triggered = {"index": n, "readiness": readiness}
             if not readiness["ready"]:
-                burst["status"] = "a5-not-ready"
-                result["bursts"].append(burst)
+                triggered["status"] = "a5-not-ready"
+                result["triggered_acquisitions"].append(triggered)
                 print(
-                    f"  burst {n:02d}: A5 NOT READY after {readiness['poll_count']} polls "
+                    f"  triggered {n:02d}: A5 NOT READY after {readiness['poll_count']} polls "
                     f"({readiness['elapsed_ms']:.1f} ms)"
                 )
                 break
@@ -166,7 +166,7 @@ def run_mode(a3: int, args, stamp: str) -> dict:
             cleanup = finish(scope, cfg.timeout_ms)
             combined = b2 + b3
 
-            prefix = f"{stamp}_slow-a3-{a3:02X}_burst-{n:02d}"
+            prefix = f"{stamp}_slow-a3-{a3:02X}_triggered-{n:02d}"
             p2 = args.output_dir / f"{prefix}_buffer02.bin"
             p3 = args.output_dir / f"{prefix}_buffer03.bin"
             pc = args.output_dir / f"{prefix}_combined.bin"
@@ -174,7 +174,7 @@ def run_mode(a3: int, args, stamp: str) -> dict:
             p3.write_bytes(b3)
             pc.write_bytes(combined)
 
-            burst.update({
+            triggered.update({
                 "status": "ok",
                 "c6_02": c602,
                 "c6_03": c603,
@@ -192,18 +192,18 @@ def run_mode(a3: int, args, stamp: str) -> dict:
                 "files": {"buffer02": str(p2), "buffer03": str(p3), "combined": str(pc)},
             })
             previous = combined
-            result["bursts"].append(burst)
+            result["triggered_acquisitions"].append(triggered)
             print(
-                f"  burst {n:02d}: A5={readiness['ready_state']}/{readiness['poll_count']} "
+                f"  triggered {n:02d}: A5={readiness['ready_state']}/{readiness['poll_count']} "
                 f"({readiness['elapsed_ms']:.2f} ms) "
                 f"C6[02]={c602['reported_bytes']:5d} B C6[03]={c603['reported_bytes']:5d} B "
                 f"total={len(combined):5d} B/{len(combined)//2:4d} words "
-                f"same-prev={burst['combined_equals_previous_exactly']}"
+                f"same-prev={triggered['combined_equals_previous_exactly']}"
             )
 
-    oks = [b for b in result["bursts"] if b.get("status") == "ok"]
+    oks = [b for b in result["triggered_acquisitions"] if b.get("status") == "ok"]
     result["summary"] = {
-        "successful_bursts": len(oks),
+        "successful_triggered_acquisitions": len(oks),
         "c6_size_pairs": [(b["buffer02_bytes"], b["buffer03_bytes"]) for b in oks],
         "any_buffer02_nonzero": any(b["buffer02_bytes"] for b in oks),
         "unique_combined_hashes": len({b["combined_sha256"] for b in oks}),
@@ -222,16 +222,16 @@ def main() -> int:
         default=parse_a3_list("12,13,14,15"),
         help="comma-separated unvalidated A3 bytes (default: 12,13,14,15)",
     )
-    p.add_argument("--bursts", type=int, default=3, help="normal acquisitions per A3 value (default: 3)")
-    p.add_argument("--max-polls", type=int, default=2000, help="A5 poll ceiling per burst (default: 2000)")
+    p.add_argument("--triggered-acquisitions", type=int, default=3, help="normal acquisitions per A3 value (default: 3)")
+    p.add_argument("--max-polls", type=int, default=2000, help="A5 poll ceiling per triggered (default: 2000)")
     p.add_argument("--usb-timeout-ms", type=int, default=1000)
     p.add_argument("--output-dir", type=Path, default=Path("captures"))
     args = p.parse_args()
 
     if args.range_id not in (1, 2, 3):
         p.error("--range must be 01, 02, or 03")
-    if args.bursts < 1:
-        p.error("--bursts must be >= 1")
+    if args.triggered_acquisitions < 1:
+        p.error("--triggered-acquisitions must be >= 1")
     if args.max_polls < 1:
         p.error("--max-polls must be >= 1")
 
@@ -244,7 +244,7 @@ def main() -> int:
 
     experiments = []
     for a3 in args.a3_list:
-        print(f"=== A3={a3:02X} (sample rate intentionally unknown), {args.bursts} burst(s) ===")
+        print(f"=== A3={a3:02X} (sample rate intentionally unknown), {args.triggered_acquisitions} triggered(s) ===")
         try:
             row = run_mode(a3, args, stamp)
         except Exception as exc:
@@ -271,7 +271,7 @@ def main() -> int:
     }
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"Detailed results: {out}")
-    print(f"Raw burst files : {args.output_dir}/{stamp}_slow-a3-*_burst-*_*.bin")
+    print(f"Raw triggered files : {args.output_dir}/{stamp}_slow-a3-*_triggered-*_*.bin")
     return 0
 
 

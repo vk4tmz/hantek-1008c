@@ -18,8 +18,8 @@ from typing import Iterable, Sequence
 from .vertical import nominal_volts_per_count
 
 FORMAT_VERSION = 1
-DEFAULT_ZERO_BURSTS = 3
-DEFAULT_VALIDATION_BURSTS = 3
+DEFAULT_ZERO_TRIGGERED_ACQUISITIONS = 3
+DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS = 3
 
 
 def calibration_path() -> Path:

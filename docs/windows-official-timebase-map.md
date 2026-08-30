@@ -59,7 +59,7 @@ extreme 1/2 ns end is collapsed at the minimum observed hardware setting; from
 | 10000 s | `27` |
 | 20000 s | `28` |
 
-The already hardware-validated burst values therefore have an official UI
+The already hardware-validated Triggered values therefore have an official UI
 interpretation:
 
 - `A3=0E` -> 50 us/div
@@ -156,7 +156,7 @@ boundary test.  The proven GUI/transport boundary is A3=19 -> A3=1A.
 
 `tools/probe_official_scan.py` is the current Linux diagnostic for the official
 Scan Mode path.  It reproduces the evidence-derived `A3=1A/1B`, `A4 01`,
-`C9/CA` sequence while leaving both canonical direct-ADC BURST and the existing
+`C9/CA` sequence while leaving both canonical direct-ADC TRIGGERED and the existing
 diagnostic `A4 02 + C7/C8` ROLL path untouched.
 
 ## Trigger position controls captured from the official application

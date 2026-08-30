@@ -190,7 +190,7 @@ def acquire_direct_buffers(
     return_ready_info: bool = False,
     return_metrics: bool = False,
 ):
-    """Acquire one direct-ADC burst using the proven trigger state machine.
+    """Acquire one direct-ADC triggered using the proven trigger state machine.
 
     The hardware is armed with A4 01 -> C0 and A5 is then polled.  C2 is *not*
     part of initial arming.
@@ -330,9 +330,9 @@ class DirectADCConfig:
 class DirectADCSession:
     """Canonical Hantek 1008C direct-ADC acquisition session.
 
-    The initialization follows the public mfg92/hantek1008py burst sequence
+    The initialization follows the public mfg92/hantek1008py Triggered sequence
     validated on hardware on 2026-08-27.  Unlike the earlier minimal path, the
-    resulting burst contains direct ADC samples and requires no integration or
+    resulting triggered contains direct ADC samples and requires no integration or
     detrending.
     """
 

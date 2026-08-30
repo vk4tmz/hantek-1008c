@@ -39,9 +39,9 @@ def test_full_reference_init_changes_buffer_layout_to_direct_adc_mode():
     assert words.max() == 2206
 
 
-def test_reference_burst_reaches_ready_state_before_readout():
+def test_reference_triggered_reaches_ready_state_before_readout():
     states = a5_states()
-    # Calibration and final burst may each poll 1 -> 2; the important invariant
+    # Calibration and final triggered may each poll 1 -> 2; the important invariant
     # is that state 2 is observed rather than reading buffers while still state 0/1.
     assert 2 in states
     assert states[-1] == 2

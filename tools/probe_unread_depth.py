@@ -6,7 +6,7 @@ scope, arms exactly one direct-ADC acquisition, drains the C6-reported buffers,
 then continues issuing A6 03 reads until the requested limit or the device
 refuses further transfers.
 
-The probe preserves the nominal burst, beyond-C6 bytes, and their concatenation
+The probe preserves the nominal triggered, beyond-C6 bytes, and their concatenation
 as raw binary files plus a JSON record. It also performs byte-level structural
 checks for exact repetition/overlap. No thresholding, smoothing, triggering,
 expected-waveform reconstruction, or waveform-specific cleanup is performed.
@@ -186,7 +186,7 @@ def safe_c6(scope, selector: int, timeout_ms: int) -> dict:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Map Hantek data beyond the C6-reported burst depth")
+    p = argparse.ArgumentParser(description="Map Hantek data beyond the C6-reported triggered depth")
     p.add_argument("--channel", type=int, default=1, choices=range(1, 9))
     p.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
     p.add_argument("--a3", type=lambda s: int(s, 16), default=0x0F)
@@ -283,7 +283,7 @@ def main() -> int:
         "channel": cfg.channel,
         "range_a2": f"{cfg.range_id:02X}",
         "a3": f"{cfg.a3:02X}",
-        "validated_within_burst_sample_rate_hz": cfg.sample_rate,
+        "validated_within_triggered_sample_rate_hz": cfg.sample_rate,
         "ready": ready,
         "c6_before_drain": {"02": before02, "03": before03},
         "drain": {

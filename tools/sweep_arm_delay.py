@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sweep the A4 -> C0/C2 arm delay for direct-ADC burst acquisition."""
+"""Sweep the A4 -> C0/C2 arm delay for direct-ADC Triggered acquisition."""
 from __future__ import annotations
 
 import argparse
@@ -41,19 +41,19 @@ def main() -> int:
     parser.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
     parser.add_argument("--a3", type=lambda s: int(s, 16), default=0x0F)
     parser.add_argument("--delays-ms", type=parse_delays, default=parse_delays("15,5,2,1,0"))
-    parser.add_argument("--bursts", type=int, default=5)
+    parser.add_argument("--triggered-acquisitions", type=int, default=5)
     args = parser.parse_args()
     if args.range_id not in (1, 2, 3):
         parser.error("--range must be 01, 02, or 03")
-    if args.bursts < 1:
-        parser.error("--bursts must be >= 1")
+    if args.triggered_acquisitions < 1:
+        parser.error("--triggered-acquisitions must be >= 1")
 
     cfg = DirectADCConfig(channel=args.channel, a3=args.a3, range_id=args.range_id)
     print(
         f"Target: CH{cfg.channel}, A2={cfg.range_id:02X}, A3={cfg.a3:02X}, "
         f"{cfg.sample_rate/1e6:.3f} MS/s"
     )
-    print(f"Sweep: {', '.join(f'{d:g} ms' for d in args.delays_ms)}; {args.bursts} bursts each")
+    print(f"Sweep: {', '.join(f'{d:g} ms' for d in args.delays_ms)}; {args.triggered_acquisitions} triggered_acquisitions each")
     print("Metrics are raw/integrity-only; no waveform cleanup or expected-shape test is used.\n")
 
     failures = 0
@@ -70,7 +70,7 @@ def main() -> int:
             mins: list[int] = []
             maxs: list[int] = []
             print(f"\n=== arm delay {delay_ms:g} ms ===")
-            for run in range(1, args.bursts + 1):
+            for run in range(1, args.triggered_acquisitions + 1):
                 started = time.perf_counter()
                 try:
                     b2, b3, ready_state, ready_polls = acquire_direct_buffers(
@@ -101,7 +101,7 @@ def main() -> int:
             if elapsed_ms:
                 print(
                     "summary: "
-                    f"ok={len(elapsed_ms)}/{args.bursts} "
+                    f"ok={len(elapsed_ms)}/{args.triggered_acquisitions} "
                     f"elapsed_median={statistics.median(elapsed_ms):.2f} ms "
                     f"polls_median={statistics.median(polls):g} "
                     f"words={min(word_counts)}..{max(word_counts)} "

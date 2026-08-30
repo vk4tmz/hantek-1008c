@@ -21,7 +21,7 @@ def resolve(meta_path: Path, stored: str) -> Path:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Analyse an 8/4/2/1 active-channel Hantek burst sweep.")
+    p = argparse.ArgumentParser(description="Analyse an 8/4/2/1 active-channel Hantek triggered sweep.")
     p.add_argument("captures", nargs="+", help="capture JSON files")
     p.add_argument("--frequency-hz", type=float, required=True)
     p.add_argument("--baseline-8ch-rate", type=float, default=100000.0,

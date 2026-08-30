@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile one-burst Hantek 1008C direct-ADC timing without altering samples."""
+"""Profile one-triggered Hantek 1008C direct-ADC timing without altering samples."""
 from __future__ import annotations
 
 import argparse
@@ -40,33 +40,33 @@ def main() -> int:
     p.add_argument("--channel", type=int, default=1, choices=range(1, 9))
     p.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
     p.add_argument("--a3", type=lambda s: int(s, 16), default=0x0F)
-    p.add_argument("--bursts", type=int, default=25)
+    p.add_argument("--triggered-acquisitions", type=int, default=25)
     p.add_argument("--arm-delay-ms", type=float, default=0.0)
     p.add_argument("--output-dir", type=Path, default=Path("captures"))
     p.add_argument("--tag", default="acquisition-timing")
     args = p.parse_args()
     if args.range_id not in (1, 2, 3):
         p.error("--range must be 01, 02, or 03")
-    if args.bursts < 1:
-        p.error("--bursts must be >= 1")
+    if args.triggered_acquisitions < 1:
+        p.error("--triggered-acquisitions must be >= 1")
     if args.arm_delay_ms < 0:
         p.error("--arm-delay-ms must be >= 0")
 
     cfg = DirectADCConfig(channel=args.channel, a3=args.a3, range_id=args.range_id)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_path = args.output_dir / f"{stamp}_{args.tag}_{args.bursts}bursts.jsonl"
-    summary_path = args.output_dir / f"{stamp}_{args.tag}_{args.bursts}bursts_summary.json"
+    jsonl_path = args.output_dir / f"{stamp}_{args.tag}_{args.triggered_acquisitions}triggered_acquisitions.jsonl"
+    summary_path = args.output_dir / f"{stamp}_{args.tag}_{args.triggered_acquisitions}triggered_acquisitions_summary.json"
 
     print(f"Target: CH{cfg.channel}, A2={cfg.range_id:02X}, A3={cfg.a3:02X}, {cfg.sample_rate/1e6:.3f} MS/s")
-    print(f"Bursts: {args.bursts}; arm delay: {args.arm_delay_ms:g} ms")
+    print(f"Triggered acquisitions: {args.triggered_acquisitions}; arm delay: {args.arm_delay_ms:g} ms")
     print("Timing only; raw acquisition semantics are unchanged.\n")
 
     rows = []
     with Hantek1008C() as scope:
         print(f"Device: {scope.connection_id}")
         DirectADCSession(scope, cfg).initialize()
-        for n in range(1, args.bursts + 1):
+        for n in range(1, args.triggered_acquisitions + 1):
             try:
                 b2, b3, state, polls, m = acquire_direct_buffers(
                     scope,
@@ -76,11 +76,11 @@ def main() -> int:
                     return_metrics=True,
                 )
             except HantekUSBError as exc:
-                print(f"burst {n}: FAIL: {exc}")
+                print(f"triggered {n}: FAIL: {exc}")
                 return 2
             words = decode_direct_u12((b2, b3))
             row = {
-                "burst": n,
+                "triggered": n,
                 "ready_state": state,
                 "ready_polls": polls,
                 "words": len(words),
@@ -92,7 +92,7 @@ def main() -> int:
             rows.append(row)
             b3m = m["buffer03"]
             print(
-                f"burst {n:3d}: total={m['total_ms']:.3f} ms "
+                f"triggered {n:3d}: total={m['total_ms']:.3f} ms "
                 f"A5={m['a5']['elapsed_ms']:.3f} ms/{polls} polls "
                 f"C6-03={b3m['c6_ms']:.3f} ms "
                 f"A6-03={b3m['a6']['elapsed_ms']:.3f} ms/{b3m['a6']['packets']} pkts "
@@ -140,9 +140,9 @@ def main() -> int:
         "channel": cfg.channel,
         "range_a2": f"{cfg.range_id:02X}",
         "a3": f"{cfg.a3:02X}",
-        "sample_rate_hz_within_burst": cfg.sample_rate,
+        "sample_rate_hz_within_triggered": cfg.sample_rate,
         "arm_delay_ms": args.arm_delay_ms,
-        "bursts": len(rows),
+        "triggered_acquisitions": len(rows),
         "phase_ms": phases,
         "buffer03_a6_packet_us": {
             "count": len(packet_totals),
@@ -164,7 +164,7 @@ def main() -> int:
     print(f"\nA6 buffer03 packets: {pkt['count']} total")
     print(f"  packet total median={pkt['total']['median']:.1f} us p95={pkt['total']['p95']:.1f} us max={pkt['total']['max']:.1f} us")
     print(f"  write median={pkt['write']['median']:.1f} us; read median={pkt['read']['median']:.1f} us")
-    print(f"\nDetailed bursts: {jsonl_path}")
+    print(f"\nDetailed triggered_acquisitions: {jsonl_path}")
     print(f"Summary        : {summary_path}")
     return 0
 

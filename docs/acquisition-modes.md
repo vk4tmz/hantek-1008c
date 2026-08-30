@@ -1,27 +1,37 @@
-# Hantek 1008C BURST and ROLL acquisition modes
+# Hantek 1008C Triggered, Scan, and diagnostic ROLL acquisition modes
 
-## Two different acquisition models
 
-The Hantek 1008C has two fundamentally different acquisition models.
+## Terminology
 
-**BURST mode** is a finite, triggered/swept acquisition. The scope is armed, a block of
+The official Hantek Windows application calls the finite C6/A6 acquisition family **Triggered**. Earlier project revisions called this family **BURST** while its protocol role was still being established. The project now uses **Triggered** for that family; this is a terminology cleanup only and does not change the C6/A6 acquisition protocol. **Scan** remains the official C9/CA streaming family, while the separate diagnostic C7/C8 **ROLL** path remains distinct.
+
+## Observed acquisition mechanisms
+
+The Hantek 1008C has three observed acquisition/transfer mechanisms relevant to this project.
+
+**TRIGGERED mode** is a finite, triggered/swept acquisition. The scope is armed, a block of
 samples is captured into hardware memory, the completed frame is transferred to the
 host, and the scope is then re-armed for another acquisition.
 
 This is the digital equivalent of a traditional triggered CRT oscilloscope. A classic
 CRT scope waits for a trigger, sweeps the beam from left to right, then retraces/resets
 before the next sweep. The retrace interval is not part of the displayed waveform.
-Likewise, the Hantek's time between BURST frames is dead time: it was not sampled and
+Likewise, the Hantek's time between TRIGGERED frames is dead time: it was not sampled and
 must never be filled with invented samples.
 
-With one active channel the Hantek has a 4K-sample BURST memory. Repeated 4K frames can
+With one active channel the Hantek has a 4K-sample TRIGGERED memory. Repeated 4K frames can
 therefore look "live" in a frontend, just as repeated CRT sweeps look continuous to the
 eye, but the frames are still separate acquisitions.
 
-**ROLL mode** is continuous low-rate acquisition. The device reports the number of
-available bytes with `C7` and the host drains them with `C8`. There is no 4K sweep
-boundary defining the trace. This behaves more like a strip-chart recorder: new
-samples continuously arrive and are appended to the timeline.
+**Official Scan mode** is the Windows application's slow streaming family. It uses
+`A4 01` with `C9/CA` transfers and begins at the validated 500 ms/div (`A3=1A`)
+boundary. Scan is distinct from both the finite C6/A6 Triggered family and the
+separate diagnostic C7/C8 path.
+
+**Diagnostic ROLL mode** is the separately observed continuous low-rate `A4 02 + C7/C8`
+path. The device reports the number of available bytes with `C7` and the host drains
+them with `C8`. There is no 4K sweep boundary defining the trace. It remains useful
+for protocol comparison but must not be renamed or treated as official Scan.
 
 ## Sample-rate and waveform guidance
 
@@ -37,7 +47,7 @@ detecting that a signal exists.
 
 These are engineering guidance values, not manufacturer guarantees.
 
-## Relevant BURST A3 / timebase / rate mapping
+## Relevant TRIGGERED A3 / timebase / rate mapping
 
 A3 is the horizontal acquisition selector. Its nominal time/div value and the actual
 ADC sample rate are related but are not identical concepts; adjacent A3 values can
@@ -80,7 +90,7 @@ hardware with a 50 Hz sine. The observed progression was approximately 40, 20, 8
 
 ## Comfortable waveform-frequency table
 
-### BURST
+### TRIGGERED
 
 | Rate | 4K sampled span | Comfortable sine | Comfortable square |
 |---:|---:|---:|---:|
@@ -107,7 +117,7 @@ hardware with a 50 Hz sine. The observed progression was approximately 40, 20, 8
 
 ## Interpretation rules
 
-1. Never join BURST frames by inventing samples for acquisition dead time.
+1. Never join TRIGGERED frames by inventing samples for acquisition dead time.
 2. Never alter samples based on knowing the expected waveform shape.
 3. Test sine and square waves are validation signals, not reconstruction hints.
 4. Nyquist is not the same as a comfortable oscilloscope display limit.
@@ -118,7 +128,7 @@ hardware with a 50 Hz sine. The observed progression was approximately 40, 20, 8
 
 This document belongs to the Python `hantek-1008c` protocol/reference project.
 
-The canonical BURST path is `hantek1008c.acquire.DirectADCSession`, used by
+The canonical TRIGGERED path is `hantek1008c.acquire.DirectADCSession`, used by
 `tools/capture_direct_adc.py` and `tools/live_scope.py`. It performs the full validated
 initialization and returns direct 12-bit ADC samples. The canonical path does not use
 delta integration, detrending, thresholding, smoothing, or waveform-specific cleanup.
@@ -126,7 +136,11 @@ delta integration, detrending, thresholding, smoothing, or waveform-specific cle
 The older `tools/capture_buffers.py` path remains useful as a protocol-laboratory and
 negative-regression tool, but it is not the canonical oscilloscope acquisition path.
 
-Validated Python BURST mappings currently include:
+The official C9/CA Scan protocol is represented in the Python reference path by
+`hantek1008c.scan_protocol`; its framing and temporal ordering are kept distinct from
+both DirectADCSession Triggered acquisition and diagnostic C7/C8 ROLL.
+
+Validated Python TRIGGERED mappings currently include:
 
 | A3 | Rate |
 |---:|---:|

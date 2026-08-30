@@ -9,7 +9,7 @@ reported bytes are drained once.
 
 The purpose is to determine whether successive arms alternate or otherwise use
 buffers 02/03 differently, and whether acquisition depth changes with A3.  Raw
-bytes are preserved for every burst.  Comparisons are exact-byte/hash based;
+bytes are preserved for every triggered.  Comparisons are exact-byte/hash based;
 there is no thresholding, smoothing, triggering, expected-waveform analysis, or
 waveform-specific reconstruction.
 """
@@ -109,7 +109,7 @@ def run_a3(a3: int, args, stamp: str) -> dict:
     row = {
         "a3": f"{a3:02X}",
         "sample_rate_hz": cfg.sample_rate,
-        "bursts": [],
+        "triggered_acquisitions": [],
     }
 
     with Hantek1008C() as scope:
@@ -118,7 +118,7 @@ def run_a3(a3: int, args, stamp: str) -> dict:
         previous_a4 = None
         previous_combined = None
 
-        for index in range(1, args.bursts + 1):
+        for index in range(1, args.triggered_acquisitions + 1):
             readiness = arm_wait(scope, cfg.timeout_ms)
             c602 = query_c6(scope, 2, cfg.timeout_ms)
             c603 = query_c6(scope, 3, cfg.timeout_ms)
@@ -129,7 +129,7 @@ def run_a3(a3: int, args, stamp: str) -> dict:
             cleanup = finish(scope, cfg.timeout_ms)
             combined = b2 + b3
 
-            prefix = f"{stamp}_successive-a3-{a3:02X}_burst-{index:02d}"
+            prefix = f"{stamp}_successive-a3-{a3:02X}_triggered-{index:02d}"
             p2 = args.output_dir / f"{prefix}_buffer02.bin"
             p3 = args.output_dir / f"{prefix}_buffer03.bin"
             pc = args.output_dir / f"{prefix}_combined.bin"
@@ -142,7 +142,7 @@ def run_a3(a3: int, args, stamp: str) -> dict:
                 a4_gap_ms = (readiness["a4_start_ns"] - previous_a4) / 1_000_000.0
             previous_a4 = readiness["a4_start_ns"]
 
-            burst = {
+            triggered = {
                 "index": index,
                 "readiness": readiness,
                 "a4_to_previous_a4_ms": a4_gap_ms,
@@ -167,21 +167,21 @@ def run_a3(a3: int, args, stamp: str) -> dict:
                 },
             }
             previous_combined = combined
-            row["bursts"].append(burst)
+            row["triggered_acquisitions"].append(triggered)
             print(
-                f"  burst {index:02d}: A5={readiness['ready_state']}/{readiness['ready_polls']} "
+                f"  triggered {index:02d}: A5={readiness['ready_state']}/{readiness['ready_polls']} "
                 f"C6[02]={c602['reported_bytes']:5d} B C6[03]={c603['reported_bytes']:5d} B "
                 f"total={len(combined):5d} B/{len(combined)//2:4d} words "
-                f"same-prev={burst['combined_equals_previous_exactly']}"
+                f"same-prev={triggered['combined_equals_previous_exactly']}"
             )
 
-    sizes = [(b["buffer02_bytes"], b["buffer03_bytes"]) for b in row["bursts"]]
+    sizes = [(b["buffer02_bytes"], b["buffer03_bytes"]) for b in row["triggered_acquisitions"]]
     row["summary"] = {
         "c6_size_pairs": sizes,
         "all_size_pairs_identical": len(set(sizes)) <= 1,
-        "unique_combined_hashes": len(set(b["combined_sha256"] for b in row["bursts"])),
-        "any_buffer02_nonzero": any(b["buffer02_bytes"] for b in row["bursts"]),
-        "any_buffer03_nonzero": any(b["buffer03_bytes"] for b in row["bursts"]),
+        "unique_combined_hashes": len(set(b["combined_sha256"] for b in row["triggered_acquisitions"])),
+        "any_buffer02_nonzero": any(b["buffer02_bytes"] for b in row["triggered_acquisitions"]),
+        "any_buffer03_nonzero": any(b["buffer03_bytes"] for b in row["triggered_acquisitions"]),
     }
     return row
 
@@ -191,14 +191,14 @@ def main() -> int:
     p.add_argument("--channel", type=int, default=1, choices=range(1, 9))
     p.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
     p.add_argument("--a3-list", default="0F,11", help="comma-separated A3 bytes (default: 0F,11)")
-    p.add_argument("--bursts", type=int, default=8, help="normal acquisitions per A3 value (default: 8)")
+    p.add_argument("--triggered-acquisitions", type=int, default=8, help="normal acquisitions per A3 value (default: 8)")
     p.add_argument("--output-dir", type=Path, default=Path("captures"))
     args = p.parse_args()
 
     if args.range_id not in (1, 2, 3):
         p.error("--range must be 01, 02, or 03")
-    if args.bursts < 2:
-        p.error("--bursts must be >= 2")
+    if args.triggered_acquisitions < 2:
+        p.error("--triggered-acquisitions must be >= 2")
     try:
         a3_values = parse_a3_list(args.a3_list)
         # Validate all values through DirectADCConfig.sample_rate before touching USB.
@@ -212,12 +212,12 @@ def main() -> int:
 
     print(f"CH{args.channel}, A2={args.range_id:02X}; successive-arm diagnostic only.")
     print("Each A3 value uses a fresh full initialization; canonical acquisition is unchanged.")
-    print("Every burst records C6 02/03 before a single exact reported-length drain.\n")
+    print("Every triggered records C6 02/03 before a single exact reported-length drain.\n")
 
     results = []
     for a3 in a3_values:
         cfg = DirectADCConfig(channel=args.channel, a3=a3, range_id=args.range_id)
-        print(f"=== A3={a3:02X} ({cfg.sample_rate/1e6:.3f} MS/s), {args.bursts} bursts ===")
+        print(f"=== A3={a3:02X} ({cfg.sample_rate/1e6:.3f} MS/s), {args.triggered_acquisitions} triggered_acquisitions ===")
         try:
             result = run_a3(a3, args, stamp)
         except Exception as exc:
@@ -233,12 +233,12 @@ def main() -> int:
         "channel": args.channel,
         "range_a2": f"{args.range_id:02X}",
         "a3_values": [f"{x:02X}" for x in a3_values],
-        "bursts_per_a3": args.bursts,
+        "triggered_acquisitions_per_a3": args.triggered_acquisitions,
         "experiments": results,
     }
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"Detailed results: {out}")
-    print(f"Raw burst files : {args.output_dir}/{stamp}_successive-a3-*_burst-*_*.bin")
+    print(f"Raw triggered files : {args.output_dir}/{stamp}_successive-a3-*_triggered-*_*.bin")
     return 0
 
 

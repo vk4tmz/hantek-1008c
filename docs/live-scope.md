@@ -9,7 +9,7 @@ Example:
 
 Defaults are A3=0F (validated 2.4 MS/s with one active channel) and A2=03.
 The hardware is fully initialized once, including the public-reference
-calibration/setup sequence, and each frame then uses guarded burst acquisition
+calibration/setup sequence, and each frame then uses guarded Triggered acquisition
 with A5 readiness polling. The returned 12-bit words are displayed directly;
 there is no delta integration, detrending, thresholding, or waveform-specific
 cleanup.

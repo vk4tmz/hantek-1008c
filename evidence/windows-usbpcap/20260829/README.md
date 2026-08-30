@@ -35,7 +35,7 @@ test waveforms.
   100 ms/div=0x18.
 - AC is structurally consistent with `u16 + u24 + u24` (big-endian fields).
 - The A3 0x17 -> 0x18 / 50 ms -> 100 ms region is a strong acquisition-mode
-  boundary candidate, but the exact BURST/ROLL transport switch remains a
+  boundary candidate, but the exact TRIGGERED/ROLL transport switch remains a
   hardware-validation question and must not be inferred solely from GUI motion.
 
 ### Startup baseline

@@ -633,9 +633,9 @@ identical 8-, 4-, 2-, and 1-channel captures.
 With the onboard 1 kHz square-wave reference and A3=0x11, measured periods were
 100, 200, 400 and 800 samples with 8, 4, 2 and 1 active channels respectively.
 This establishes approximately 800 ksample/s aggregate at A3=0x11, divided among
-active channels, while the 8000-byte burst payload remains constant.
+active channels, while the 8000-byte Triggered payload remains constant.
 
-The reference implementation maps A3 to a 1-2-5 burst time/div ladder. Around
+The reference implementation maps A3 to a 1-2-5 Triggered time/div ladder. Around
 0x11 the adjacent faster settings are:
 
 - 0x11 = 500 us/div
@@ -722,7 +722,7 @@ uses either word yet.
 
 ## AC A/B check at A3=11 (2026-08-29)
 
-A controlled Python BURST experiment compared the project's historical final
+A controlled Python TRIGGERED experiment compared the project's historical final
 `AC 00 00 00 00 01 00 05 79` (`0,1,1401`) with the official Windows A3=11
 value `AC 00 00 00 00 01 00 13 89` (`0,1,5001`).  All other acquisition
 settings were held constant: CH1 only, A3=11, A2=03, A4=01 and the same
@@ -732,7 +732,7 @@ Both settings reached A5 ready state normally and produced identical physical
 buffer geometry: buffer 02 empty, buffer 03 exactly 8000 bytes, 125 x 64-byte
 A6 reads, zero discarded tail.  This proves that the official AC value is
 accepted, but it does **not** demonstrate a production benefit or establish
-that samplerate-driven BURST must mirror the official application's horizontal
+that samplerate-driven TRIGGERED must mirror the official application's horizontal
 window mapping.  Do not change canonical AC programming from this experiment
 alone.
 
@@ -889,7 +889,7 @@ The historical diagnostic ROLL rates `1, 5, 9, 23, 50, 100, 201, 401 Sa/s` are
 also omitted from libsigrok's advertised PulseView list to avoid presenting two
 rate families for the same official Scan timebase region. The retained public
 non-Scan rates are 1003 and 2006 Sa/s in the official Trigger region and the two
-validated BURST rates.
+validated TRIGGERED rates.
 
 ### Production hardware validation: A3=1A through A3=22
 
@@ -1062,7 +1062,7 @@ oversize C9 event occurred. Capture-end carry was preserved as observed (0 or
 production Scan mapping for A3=1D while preserving the separate existing
 50 Sa/s C7/C8 ROLL mapping at the same A3 selector.
 
-Existing C7/C8 ROLL and C6/A6 BURST behaviour remain separate and unchanged.
+Existing C7/C8 ROLL and C6/A6 TRIGGERED behaviour remain separate and unchanged.
 
 ## Linux hardware-trigger validation and frontend policy
 
@@ -1088,7 +1088,7 @@ only after the diagnostic sent C2.  This proves that C0 arms a genuine hardware
 trigger wait, A5 state 0 is the waiting state, A5 state 2 is a completed/ready
 state, and C2 is a forced-completion action rather than part of initial arming.
 
-The canonical Python direct-burst path therefore implements two frontend
+The canonical Python direct-Triggered path therefore implements two frontend
 policies:
 
 - **Auto/free-running** (`trigger_enabled=False`): arm with C0, poll A5 for the

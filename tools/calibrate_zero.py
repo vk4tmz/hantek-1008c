@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hantek1008c import Hantek1008C, HantekUSBError
 from hantek1008c.acquire import DirectADCConfig, DirectADCSession
 from hantek1008c.calibration import (
-    DEFAULT_VALIDATION_BURSTS,
-    DEFAULT_ZERO_BURSTS,
+    DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS,
+    DEFAULT_ZERO_TRIGGERED_ACQUISITIONS,
     build_zero_calibration,
     calibration_path,
     save_reference_validation,
@@ -35,12 +35,12 @@ def prompt(message: str, assume_yes: bool) -> None:
     input(message + "\nPress Enter when ready... ")
 
 
-def acquire_frames(cfg: DirectADCConfig, bursts: int) -> tuple[str, list[list[int]]]:
+def acquire_frames(cfg: DirectADCConfig, triggered_acquisitions: int) -> tuple[str, list[list[int]]]:
     with Hantek1008C() as scope:
         connection_id = scope.connection_id
         session = DirectADCSession(scope, cfg)
         session.initialize()
-        frames = [session.acquire_words() for _ in range(bursts)]
+        frames = [session.acquire_words() for _ in range(triggered_acquisitions)]
     return connection_id, frames
 
 
@@ -53,15 +53,15 @@ def main() -> int:
     )
     parser.add_argument("--channel", type=int, default=1, choices=range(1, 9))
     parser.add_argument("--range", dest="range_id", type=parse_byte, default=0x03)
-    parser.add_argument("--zero-bursts", type=int, default=DEFAULT_ZERO_BURSTS)
-    parser.add_argument("--validation-bursts", type=int, default=DEFAULT_VALIDATION_BURSTS)
+    parser.add_argument("--zero-triggered_acquisitions", type=int, default=DEFAULT_ZERO_TRIGGERED_ACQUISITIONS)
+    parser.add_argument("--validation-triggered_acquisitions", type=int, default=DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS)
     parser.add_argument("--max-zero-stddev", type=float, default=5.0)
     parser.add_argument("--max-zero-span", type=int, default=32)
     parser.add_argument("--skip-validation", action="store_true")
     parser.add_argument("--yes", action="store_true", help="do not wait for interactive prompts")
     args = parser.parse_args()
-    if args.zero_bursts < 1 or args.validation_bursts < 1:
-        parser.error("burst counts must be >= 1")
+    if args.zero_triggered_acquisitions < 1 or args.validation_triggered_acquisitions < 1:
+        parser.error("Triggered acquisition counts must be >= 1")
 
     cfg = DirectADCConfig(channel=args.channel, a3=0x0F, range_id=args.range_id)
     print(f"Calibration store: {calibration_path()}")
@@ -73,7 +73,7 @@ def main() -> int:
     )
 
     try:
-        connection_id, frames = acquire_frames(cfg, args.zero_bursts)
+        connection_id, frames = acquire_frames(cfg, args.zero_triggered_acquisitions)
     except HantekUSBError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 4
@@ -107,7 +107,7 @@ def main() -> int:
         args.yes,
     )
     try:
-        validation_connection, reference_frames = acquire_frames(cfg, args.validation_bursts)
+        validation_connection, reference_frames = acquire_frames(cfg, args.validation_triggered_acquisitions)
     except HantekUSBError as exc:
         print(f"ERROR: validation capture failed: {exc}", file=sys.stderr)
         return 6

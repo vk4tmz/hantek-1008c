@@ -91,7 +91,7 @@ python tools/calibrate_zero.py --channel 1 --range 03
 
 The tool performs two deliberately separate phases:
 
-1. Ground CH1. Several direct-ADC bursts establish and store the zero offset
+1. Ground CH1. Several direct-ADC Triggered acquisitions establish and store the zero offset
    only if the grounded data are stable.
 2. Connect the onboard 1 kHz / 2 Vp-p reference. The tool checks frequency and
    amplitude and records the result, but this validation never changes the zero
@@ -453,8 +453,8 @@ sample timing independent of future fixes to baseline/voltage reconstruction.
 ## Canonical direct-ADC acquisition (2026-08-27)
 
 Hardware testing against the public `mfg92/hantek1008py` initialization sequence
-showed that the full initialization places the 1008C into direct-ADC burst mode.
-In that state a one-channel burst is 4000 direct 12-bit samples (normally 8000
+showed that the full initialization places the 1008C into direct-ADC Triggered mode.
+In that state a one-channel Triggered acquisition is 4000 direct 12-bit samples (normally 8000
 bytes in buffer 03, buffer 02 empty) and requires **no delta integration or
 linear detrending**.
 
@@ -462,7 +462,7 @@ Use the live viewer:
 
     python tools/live_scope.py --channel 1
 
-or save one canonical direct-ADC burst:
+or save one canonical direct-ADC Triggered acquisition:
 
     python tools/capture_direct_adc.py --channel 1 --a3 0f --range 03
 

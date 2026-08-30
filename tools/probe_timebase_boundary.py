@@ -15,7 +15,7 @@ configuration discontinuity:
 This tool asks a deliberately narrower question: which acquisition transport
 works after programming those exact A3+AC pairs?
 
-It tests burst framing (A4 01 + A5/C6) and/or the independently validated ROLL
+It tests triggered framing (A4 01 + A5/C6) and/or the independently validated ROLL
 transport (A4 02 + C7/C8).  It records protocol-level evidence and raw bytes.
 It does not add canonical sample-rate mappings, perform voltage conversion,
 recognize waveforms, smooth, threshold, interpolate, integrate, or detrend.
@@ -81,7 +81,7 @@ def program_profile(scope, profile: dict, timeout_ms: int) -> list[dict]:
     ]
 
 
-def burst_probe(scope, timeout_ms: int, max_polls: int) -> dict:
+def triggered_probe(scope, timeout_ms: int, max_polls: int) -> dict:
     rows = []
     for payload in (
         b"\xF3",
@@ -100,7 +100,7 @@ def burst_probe(scope, timeout_ms: int, max_polls: int) -> dict:
         )
     except HantekUSBError as exc:
         return {
-            "transport": "burst-a4-01",
+            "transport": "triggered-a4-01",
             "status": "a5-not-ready",
             "error": str(exc),
             "transactions": rows,
@@ -116,7 +116,7 @@ def burst_probe(scope, timeout_ms: int, max_polls: int) -> dict:
         tx(scope, bytes.fromhex("E6 01"), timeout_ms),
     ])
     return {
-        "transport": "burst-a4-01",
+        "transport": "triggered-a4-01",
         "status": "ok",
         "ready_state": state,
         "ready_polls": polls,
@@ -194,8 +194,8 @@ def run_one(profile_name: str, transport: str, args, stamp: str) -> dict:
         DirectADCSession(scope, cfg).initialize()
         programmed = program_profile(scope, profile, args.usb_timeout_ms)
         time.sleep(args.settle_ms / 1000.0)
-        if transport == "burst":
-            result = burst_probe(scope, args.usb_timeout_ms, args.max_polls)
+        if transport == "triggered":
+            result = triggered_probe(scope, args.usb_timeout_ms, args.max_polls)
         else:
             result = roll_probe(
                 scope, args.usb_timeout_ms, args.roll_capture_s, args.poll_ms
@@ -231,7 +231,7 @@ def main() -> int:
         help="official Windows A3/AC profile(s) to test (default: both)",
     )
     p.add_argument(
-        "--transport", choices=("burst", "roll", "both"), default="both",
+        "--transport", choices=("triggered", "roll", "both"), default="both",
         help="transport(s) to try, each in a fresh USB session (default: both)",
     )
     p.add_argument("--settle-ms", type=float, default=10.0)
@@ -248,7 +248,7 @@ def main() -> int:
         p.error("invalid timing argument")
 
     profiles = ["17", "18"] if args.profiles == "both" else [args.profiles]
-    transports = ["burst", "roll"] if args.transport == "both" else [args.transport]
+    transports = ["triggered", "roll"] if args.transport == "both" else [args.transport]
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 

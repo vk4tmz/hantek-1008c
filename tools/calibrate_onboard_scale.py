@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hantek1008c import Hantek1008C, HantekUSBError
 from hantek1008c.acquire import DirectADCConfig, DirectADCSession
 from hantek1008c.calibration import (
-    DEFAULT_VALIDATION_BURSTS, calibration_path, estimate_onboard_reference_scale,
+    DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS, calibration_path, estimate_onboard_reference_scale,
     load_zero_calibration, replace_voltage_scale, save_zero_calibration,
 )
 from hantek1008c.vertical import nominal_volts_per_count
@@ -23,12 +23,12 @@ def main() -> int:
     ap=argparse.ArgumentParser(description="Estimate Hantek 1008C V/count from nominal onboard 1 kHz / 2 Vp-p square reference.")
     ap.add_argument('--channel',type=int,default=1,choices=range(1,9))
     ap.add_argument('--range',dest='range_id',type=parse_range,default=0x03)
-    ap.add_argument('--bursts',type=int,default=DEFAULT_VALIDATION_BURSTS)
+    ap.add_argument('--triggered-acquisitions',type=int,default=DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS)
     ap.add_argument('--expected-vpp',type=float,default=2.0)
     ap.add_argument('--save-scale',action='store_true',help='replace the stored nominal scale; otherwise report only')
     ap.add_argument('--yes',action='store_true')
     args=ap.parse_args()
-    if args.bursts < 1: ap.error('--bursts must be >= 1')
+    if args.triggered_acquisitions < 1: ap.error('--triggered-acquisitions must be >= 1')
     if not args.yes:
         input(f"Connect CH{args.channel} to the onboard 1 kHz / nominal {args.expected_vpp:g} Vp-p reference.\nPress Enter when ready... ")
     cfg=DirectADCConfig(channel=args.channel,a3=0x0F,range_id=args.range_id)
@@ -39,7 +39,7 @@ def main() -> int:
             if old is None:
                 print(f"ERROR: no stored zero calibration for {cid} CH{args.channel} A2={args.range_id:02X}",file=sys.stderr); return 5
             sess=DirectADCSession(scope,cfg); sess.initialize()
-            frames=[sess.acquire_words() for _ in range(args.bursts)]
+            frames=[sess.acquire_words() for _ in range(args.triggered_acquisitions)]
     except HantekUSBError as exc:
         print(f"ERROR: {exc}",file=sys.stderr); return 4
     scale,span=estimate_onboard_reference_scale(frames,args.expected_vpp)

@@ -2,7 +2,7 @@
 """Diagnostic-only Hantek 1008C A6 command-pipelining probes.
 
 The canonical acquisition path remains untouched.  Each queue depth uses a
-fresh USB/device initialization, captures one normal direct-ADC burst, then
+fresh USB/device initialization, captures one normal direct-ADC triggered, then
 reads buffer 03 by sending up to N A6 commands before reading the matching N
 64-byte replies.  Every returned byte and per-batch timing is preserved.
 """

@@ -47,8 +47,8 @@ def parse_args():
     p.add_argument("--delay-ms", type=int, help="inter-command delay")
     p.add_argument("--timeout-ms", type=int, help="USB read/write timeout")
     p.add_argument("--tag", help="short label added to output filenames")
-    p.add_argument("--reference-burst-guards", action="store_true",
-                   help="send reference-driver E4 01 / E6 01 guard commands immediately before and after burst acquisition")
+    p.add_argument("--reference-triggered-guards", action="store_true",
+                   help="send reference-driver E4 01 / E6 01 guard commands immediately before and after Triggered acquisition")
     p.add_argument("--reference-f6", action="store_true",
                    help="send reference-driver F6 command at the startup/calibration position")
     p.add_argument("--dry-run", action="store_true", help="print resolved configuration and exit")
@@ -113,7 +113,7 @@ def load_settings(args):
         "delay_ms": args.delay_ms if args.delay_ms is not None else int(cap.get("inter_command_delay_ms", 30)),
         "timeout_ms": args.timeout_ms if args.timeout_ms is not None else int(cap.get("read_timeout_ms", 1000)),
         "tag": args.tag,
-        "reference_burst_guards": bool(args.reference_burst_guards),
+        "reference_triggered_guards": bool(args.reference_triggered_guards),
         "reference_f6": bool(args.reference_f6),
     }
 
@@ -169,7 +169,7 @@ def main():
     print(f"  AC     : {hex_bytes(s['ac'])}")
     print(f"  delay  : {s['delay_ms']} ms")
     print(f"  timeout: {s['timeout_ms']} ms")
-    print(f"  ref burst guards: {'yes' if s['reference_burst_guards'] else 'no'}")
+    print(f"  ref triggered guards: {'yes' if s['reference_triggered_guards'] else 'no'}")
     print(f"  ref F6          : {'yes' if s['reference_f6'] else 'no'}")
     if args.dry_run:
         return 0
@@ -207,10 +207,10 @@ def main():
                 tx(scope, label, payload, s)
                 time.sleep(s["delay_ms"] / 1000)
             print("\n=== Waiting/acquisition sequence ===")
-            # The public hantek1008py burst path brackets acquisition with E4 01
+            # The public hantek1008py Triggered path brackets acquisition with E4 01
             # and E6 01.  Its source explicitly notes these may not be required,
             # so this experiment keeps them opt-in and changes nothing else.
-            if s["reference_burst_guards"]:
+            if s["reference_triggered_guards"]:
                 tx(scope, "REF-E4-pre", bytes.fromhex("E4 01"), s)
                 time.sleep(s["delay_ms"] / 1000)
                 tx(scope, "REF-E6-pre", bytes.fromhex("E6 01"), s)
@@ -227,8 +227,8 @@ def main():
             size03, raw03 = query_size(scope, 3, s)
             buf03 = read_buffer(scope, 3, size03, s)
 
-            if s["reference_burst_guards"]:
-                print("\n=== Reference-driver post-burst guards ===")
+            if s["reference_triggered_guards"]:
+                print("\n=== Reference-driver post-triggered guards ===")
                 tx(scope, "REF-E4-post", bytes.fromhex("E4 01"), s)
                 time.sleep(s["delay_ms"] / 1000)
                 tx(scope, "REF-E6-post", bytes.fromhex("E6 01"), s)
@@ -245,7 +245,7 @@ def main():
     metadata = {
         "timestamp_utc": stamp,
         "tag": args.tag,
-        "reference_burst_guards": bool(args.reference_burst_guards),
+        "reference_triggered_guards": bool(args.reference_triggered_guards),
         "reference_f6": bool(args.reference_f6),
         "vid_pid": "0783:5725",
         "resolved_configuration": {
@@ -259,7 +259,7 @@ def main():
             "ac_hex": s["ac"].hex().upper(),
             "inter_command_delay_ms": s["delay_ms"],
             "timeout_ms": s["timeout_ms"],
-            "reference_burst_guards": s["reference_burst_guards"],
+            "reference_triggered_guards": s["reference_triggered_guards"],
             "reference_f6": s["reference_f6"],
         },
         "buffer02": {"selector": 2, "reported_size_raw_hex": raw02.hex().upper(),

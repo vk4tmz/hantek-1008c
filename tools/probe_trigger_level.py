@@ -3,7 +3,7 @@
 
 Diagnostic protocol-lab tool only. It changes only AB between captures while
 holding the acquisition, channel, range, and raw C1 selector constant. Samples
-are preserved exactly as returned by the canonical direct-ADC burst path.
+are preserved exactly as returned by the canonical direct-ADC Triggered path.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def main() -> int:
     print(" PHYSICAL CONDITION: CONNECT CH1 TO 1 kHz SQUARE-WAVE SOURCE")
     print(" Keep CH1 connected for the entire probe.")
     print("============================================================")
-    print("A3=0F, A2=03, CH1 only, canonical direct-ADC burst path")
+    print("A3=0F, A2=03, CH1 only, canonical direct-ADC Triggered path")
     print(f"C1 held at raw value 00 {args.c1_raw:02X} ({'rising/+' if args.c1_raw == 0 else 'falling/-'})")
     print("AB levels: " + " ".join(f"{v:04X}" for v in args.levels))
     print("No assumption is made that AB numeric values map 1:1 to decoded ADC codes.")

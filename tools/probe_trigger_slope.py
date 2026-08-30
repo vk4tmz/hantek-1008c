@@ -62,7 +62,7 @@ def main() -> int:
     print(" PHYSICAL CONDITION: CONNECT CH1 TO 1 kHz SQUARE-WAVE SOURCE")
     print(" Keep CH1 connected for the entire probe.")
     print("============================================================")
-    print("A3=0F, A2=03, CH1 only, canonical direct-ADC burst path")
+    print("A3=0F, A2=03, CH1 only, canonical direct-ADC Triggered path")
     print(f"AB trigger level = 0x{args.trigger_level:04X}")
     print("C1 raw mapping is now proven: 00=+/rising, 01=-/falling.")
 
