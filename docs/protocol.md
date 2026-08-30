@@ -681,7 +681,7 @@ Targeted captures from the official Hantek application refine several previously
 
 - `AB hi lo` is the vertical trigger threshold, a big-endian 16-bit ADC-domain value.
 - `AC [u16] [u24] [u24]` carries horizontal acquisition-window/trigger-position information; the two u24 fields partition the total horizontal window.
-- `C1 00 xx` is the Edge-trigger slope/polarity control. Correlation against the recorded Windows UI chronology (`+ -> - -> + -> - ... -> +`) proves `C1 00 00` = `+` / rising and `C1 00 01` = `-` / falling.
+- `C1 <source> <slope>` is the Edge-trigger source/slope control. The 2026-08-29 CH1-only slope chronology proves second byte `00` = `+` / rising and `01` = `-` / falling; 2026-08-30 multi-channel evidence proves the first byte is zero-based source numbering through CH5 (`00`..`04`).
 - Trigger Sweep `Auto / Normal / Single` did not reveal a distinct new configuration opcode. Observed differences are consistent with host acquisition/re-arm policy; do not assign an unsupported sweep byte.
 - Official Trigger mode remains active through 200 ms/div (`A3 19`); official Scan Mode starts at 500 ms/div (`A3 1A`) and uses the `C9/CA` transfer family while `A4 01` remains in use. This is distinct from the project's diagnostic `A4 02 + C7/C8` ROLL path.
 
@@ -1114,3 +1114,102 @@ The 1 kHz square wave and grounded input are validation controls only.  No
 waveform-specific thresholding, alignment, smoothing, or reconstruction is
 introduced into the canonical sample path.
 
+
+
+## Official Windows multi-channel acquisition evidence (2026-08-30)
+
+The 2026-08-30 official-application USBPcap corpus extends the Windows protocol
+map to multi-channel Triggered acquisition.  At 10 ms/div the physical C6/A6
+frame remains 8000 bytes / 4000 little-endian 16-bit words while the acquisition
+width changes with the number of channels explicitly enabled in the UI:
+
+| Explicit UI channels | Observed acquisition width | Approx. words/lane |
+|---:|---:|---:|
+| 1 | 1 | 4000 |
+| 2 | 2 | 2000 |
+| 3 | 4 | 1000 |
+| 4 | 4 | 1000 |
+| 5 | 6 | 667/666 |
+| 6 | 6 | 667/666 |
+| 7 | 8 | 500 |
+| 8 | 8 | 500 |
+
+The independent CH1 1 kHz square-wave and CH2 4 kHz sine identify the first two
+lanes and establish sample-by-sample interleaving without using waveform-specific
+cleanup.  CH1+CH8 additionally demonstrates that enabled non-adjacent physical
+channels can occupy the acquisition stream.
+
+Do **not** yet classify the odd-width rounding (3->4, 5->6, 7->8) as a bug,
+fixed channel-pair architecture, or accidental adjacent-channel enable.  It is
+an observed hardware/application behaviour only.  The next Linux/Python
+protocol-lab experiment should put a distinctive signal on nominally disabled
+CH4/CH6/CH8 while explicitly enabling 3/5/7 channels respectively and inspect
+the extra lane.  That will distinguish a real adjacent ADC sample lane from
+padding/internal acquisition state before any model is promoted into libsigrok.
+
+Channel-configuration captures establish examples such as:
+
+```text
+CH1 only: A0 01 ; AA 01 00 00 00 00 00 00 00
+CH1+CH2:  A0 02 ; AA 01 01 00 00 00 00 00 00
+CH1+CH8:  A0 02 ; AA 01 00 00 00 00 00 00 01
+```
+
+The final 5->6->7->8 enable capture proves that A0 and AA are not always merely
+redundant encodings of the same count.  In particular AA can expand to eight
+active acquisition entries at the CH7 transition before the later explicit CH8
+enable changes A0 to 08.  Preserve the exact command chronology until the two
+fields' semantics are independently established.
+
+### Multi-channel hardware trigger source
+
+The first C1 parameter is now directly established as a zero-based physical
+trigger-source channel through CH5, while the second parameter remains slope:
+
+```text
+C1 00 00 = CH1 rising
+C1 01 00 = CH2 rising
+C1 02 00 = CH3 rising
+C1 03 00 = CH4 rising
+C1 04 00 = CH5 rising
+```
+
+On source change, the official application sends the selected source's own raw
+ADC threshold before source/slope and arm:
+
+```text
+AB <source-specific threshold>
+C1 <source> <slope>
+F3
+A4 01
+C0
+```
+
+A CH2->CH1 test, with the Windows UI storing CH1=-105 mV and CH2=0 V, sent
+`AB 07 C9` before `C1 00 00`.  It therefore did not carry CH2's 0 V threshold
+across to CH1.  Different channels set to 0 V also produced different AB codes,
+so UI/physical trigger voltage is converted to a source-channel-specific ADC
+threshold rather than a universal zero code.  The frontend should therefore
+own the user-facing per-channel trigger level; the hardware layer should program
+the selected source and the corresponding resolved raw threshold.
+
+### USBPcap device-address / re-enumeration warning
+
+During official Windows trigger-source experiments the Hantek was observed to
+disappear and return under a new USB device address (for example Dev32 -> Dev33
+-> Dev34).  Filtering a capture to only the original USB device address can
+silently remove all later Hantek traffic and make higher-channel C1 commands
+appear to be missing.  Broader captures subsequently recovered ordinary
+`C1 03 00` and `C1 04 00` traffic for CH4 and CH5.
+
+A control run with Wireshark/USBPcap stopped still reproduced several-second UI/
+acquisition pauses on some trigger-source changes, so the pause itself is not a
+Wireshark artefact.  The exact cause and relationship of the USB re-enumeration
+remains unresolved; do not encode re-enumeration as a required part of the
+trigger protocol.  Future Windows captures should follow the device across
+address changes (for example by VID:PID or by retaining broader USB traffic)
+instead of assuming a fixed Dev address.
+
+The compressed captures supporting these 2026-08-30 findings are retained under
+`evidence/windows-usbpcap/20260830/`, with provenance in `README.md` and hashes
+in `SHA256SUMS.txt`.

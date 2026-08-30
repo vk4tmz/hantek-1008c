@@ -1,10 +1,11 @@
-# Official Windows application timebase evidence (2026-08-29)
+# Official Windows application timebase evidence (2026-08-29/30)
 
 This note records USB traffic captured from the official Hantek Windows
-application controlling the project 1008C.  The capture was made with CH1 only,
-x1 probe adjustment, Auto acquisition, the onboard 1 kHz / 2 Vpp reference
-signal, and a complete horizontal time/div sweep from 1 ns/div through
-20000 s/div and back.
+application controlling the project 1008C.  The original capture was made with CH1 only, x1 probe adjustment, Auto
+acquisition, the onboard 1 kHz / 2 Vpp reference signal, and a complete
+horizontal time/div sweep through the official UI ladder.  A focused 2026-08-30
+5 ns -> 2 ns -> 1 ns -> 2 ns -> 5 ns capture corrected the extreme fast-end
+mapping and directly established the previously missed `A3=00` state.
 
 This is protocol evidence, not a request to promote unvalidated sample rates
 into the canonical acquisition path.
@@ -17,8 +18,8 @@ extreme 1/2 ns end is collapsed at the minimum observed hardware setting; from
 
 | Horizontal time/div | A3 |
 |---|---:|
-| 1 ns | `01` |
-| 2 ns | `01` (same minimum state; no distinct transition observed) |
+| 1 ns | `00` |
+| 2 ns | `01` |
 | 5 ns | `02` |
 | 10 ns | `03` |
 | 20 ns | `04` |
@@ -241,11 +242,25 @@ Future Linux work should characterize C9/CA independently before promoting
 official Scan Mode into the canonical Python or libsigrok acquisition paths.
 ## Official Edge-trigger controls
 
-The Windows Trigger dialog exposes Edge mode with Sweep (Auto, Normal, Single), Source (CH1 in the one-channel capture), and Slope (+/-). Dedicated one-variable USBPcap captures were made at 10 ms/div with CH1 on the onboard 1 kHz / 2 Vpp reference signal.
+The Windows Trigger dialog exposes Edge mode with Sweep (Auto, Normal, Single), Source, and Slope (+/-).  The 2026-08-29 one-channel captures established slope; 2026-08-30 multi-channel captures directly establish trigger-source selection through CH5 and show that the selected source's channel-specific `AB` threshold is programmed before arming.
 
-### Trigger slope: C1
+### Trigger source and slope: C1
 
-Changing only Trigger Slope produces the `C1 00 xx` command family. The captured `+ -> - -> + -> - -> +` sequence generated alternating `C1 00 01` and `C1 00 00` writes with no competing configuration change. This proves `C1` is the Edge-trigger slope/polarity control. The numeric value-to-`+`/`-` orientation remains deliberately unlabeled until transition ordering is correlated unambiguously.
+The first C1 parameter is the zero-based trigger-source channel and the second is
+the slope/polarity selector.  Direct Windows evidence now establishes through CH5:
+
+```text
+C1 00 00 = CH1 rising
+C1 01 00 = CH2 rising
+C1 02 00 = CH3 rising
+C1 03 00 = CH4 rising
+C1 04 00 = CH5 rising
+```
+
+The earlier one-variable slope chronology establishes second-byte `00` = `+` /
+rising and `01` = `-` / falling.  CH6--CH8 source numbers remain a straightforward
+zero-based extrapolation, but are not yet separately captured and therefore are not
+claimed as direct evidence.
 
 ### Trigger Sweep: Auto / Normal / Single
 
@@ -258,7 +273,7 @@ Do not invent an Auto/Normal/Single protocol byte from this capture. The exact s
 ```text
 vertical trigger level       -> AB big-endian 16-bit ADC-domain threshold
 horizontal trigger position  -> AC acquisition-window partition/position
-edge trigger slope           -> C1 00 xx
+edge trigger source/slope    -> C1 <zero-based source> <00 rising / 01 falling>
 trigger sweep                -> Auto/Normal/Single re-arm behaviour; no dedicated opcode proven
 ```
 
@@ -292,3 +307,11 @@ hardware requirement.
 prefix from each 64-byte CA packet and stores the raw bytes without waveform
 processing.  It refuses a C9 count above 64 rather than inventing an unobserved
 continuation protocol.
+
+
+## 2026-08-30 evidence location
+
+The compressed captures supporting the corrected `A3=00` fast-end mapping and the
+multi-channel acquisition/trigger findings are retained under
+`evidence/windows-usbpcap/20260830/`.  See that directory's `README.md` and
+`SHA256SUMS.txt` for capture-by-capture provenance.
