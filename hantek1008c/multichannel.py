@@ -6,14 +6,17 @@ import statistics
 from typing import Iterable, Sequence
 
 
-WINDOWS_OBSERVED_WIDTH = {1: 1, 2: 2, 3: 4, 4: 4, 5: 6, 6: 6, 7: 8, 8: 8}
+# Independently hardware-validated at A3=0x11 on 2026-08-30.
+VERIFIED_ACQUISITION_WIDTH = {1: 1, 2: 2, 3: 4, 4: 4, 5: 6, 6: 6, 7: 8, 8: 8}
+# Backward-compatible name retained for protocol-lab reports created before validation.
+WINDOWS_OBSERVED_WIDTH = VERIFIED_ACQUISITION_WIDTH
 
 
 def observed_windows_width(logical_count: int) -> int:
-    """Return the acquisition width observed in the official Windows app.
+    """Return the hardware-validated direct-ADC acquisition width.
 
-    This is an evidence-derived lookup table, not a claim about the hardware's
-    internal architecture.
+    The function name is retained for compatibility with earlier lab tooling;
+    the 1,2,4,4,6,6,8,8 table is now independently validated at A3=0x11.
     """
     try:
         return WINDOWS_OBSERVED_WIDTH[int(logical_count)]
@@ -86,6 +89,32 @@ def make_plan(logical_channels: Sequence[int], *, a0_mode: str, aa_mode: str, na
         aa=aa,
     )
 
+
+
+def acquisition_layout(channels: Sequence[int]) -> tuple[tuple[int, ...], int]:
+    """Return canonical packed physical-channel order and acquisition width.
+
+    AA-selected channels are packed in ascending physical-channel order.  For
+    odd counts 3, 5, and 7 the hardware adds one final dummy acquisition slot.
+    This layout is hardware-validated for direct ADC at A3=0x11.
+    """
+    logical = tuple(sorted(set(int(ch) for ch in channels)))
+    if not logical or len(logical) != len(channels) or any(ch < 1 or ch > 8 for ch in logical):
+        raise ValueError("channels must contain unique values in 1..8")
+    return logical, observed_windows_width(len(logical))
+
+
+def compact_enabled_rows(words: Sequence[int], channels: Sequence[int]) -> list[list[int]]:
+    """Decode complete physical rows and discard the validated final dummy slot.
+
+    The return value contains one sample list per enabled physical channel in
+    ascending channel order.  An incomplete trailing physical row is discarded
+    so all returned channels have the same number of samples.
+    """
+    logical, width = acquisition_layout(channels)
+    rows = len(words) // width
+    return [[words[row * width + lane] for row in range(rows)]
+            for lane, _channel in enumerate(logical)]
 
 def deinterleave_words(words: Sequence[int], lane_count: int) -> list[list[int]]:
     """Deinterleave a physical word stream without requiring equal lane lengths.

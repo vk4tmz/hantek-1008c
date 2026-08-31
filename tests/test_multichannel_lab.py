@@ -3,7 +3,9 @@ import math
 import pytest
 
 from hantek1008c.multichannel import (
+    acquisition_layout,
     candidate_geometry,
+    compact_enabled_rows,
     contiguous_mask,
     deinterleave_words,
     estimate_period_generic,
@@ -107,3 +109,33 @@ def test_candidate_geometry_reports_unequal_six_lane_lengths():
     rows = candidate_geometry(list(range(4000)), reference_lane=0, reference_frequency_hz=1000.0)
     row6 = next(row for row in rows if row["lane_count"] == 6)
     assert row6["lane_lengths"] == [667, 667, 667, 667, 666, 666]
+
+
+def test_verified_sparse_layout_is_compact_and_uses_count_width():
+    channels, width = acquisition_layout((1, 8))
+    assert channels == (1, 8)
+    assert width == 2
+
+
+@pytest.mark.parametrize("channels,width", [
+    ((1, 2, 3), 4),
+    ((1, 2, 3, 4, 5), 6),
+    ((1, 2, 3, 4, 5, 6, 7), 8),
+])
+def test_verified_odd_layout_has_one_final_dummy_slot(channels, width):
+    assert acquisition_layout(channels) == (channels, width)
+
+
+def test_compact_enabled_rows_discards_dummy_and_partial_tail():
+    # Four-wide rows: CH1, CH8, dummy-like extra slots are represented here by
+    # a three-channel logical layout plus final dummy.  The trailing incomplete
+    # row is deliberately ignored to preserve equal channel lengths.
+    words = [10, 20, 30, 99, 11, 21, 31, 98, 12, 22]
+    assert compact_enabled_rows(words, (1, 2, 3)) == [
+        [10, 11], [20, 21], [30, 31]
+    ]
+
+
+def test_compact_enabled_rows_sparse_channel_order():
+    words = [100, 800, 101, 801]
+    assert compact_enabled_rows(words, (1, 8)) == [[100, 101], [800, 801]]

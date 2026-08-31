@@ -50,3 +50,51 @@ The official Windows width table remains an observation, not an architectural
 claim.  Python results are protocol-lab evidence until hardware validation is
 complete.  Only then should the canonical Python acquisition API and the
 libsigrok production driver gain a multi-channel sampling model.
+
+## 2026-08-30 hardware-validated result
+
+The A3=0x11 laboratory series is complete on the development unit.  The
+Windows-observed width table is now independently reproduced by Linux direct
+ADC captures and the routing semantics are hardware-validated.
+
+For N enabled physical channels, the acquisition stream width is:
+
+| Enabled channels | Physical width | Effective rate at A3=0x11 |
+|---:|---:|---:|
+| 1 | 1 | ~800 kS/s/channel |
+| 2 | 2 | ~400 kS/s/channel |
+| 3 | 4 | ~200 kS/s/channel |
+| 4 | 4 | ~200 kS/s/channel |
+| 5 | 6 | ~133.3 kS/s/channel |
+| 6 | 6 | ~133.3 kS/s/channel |
+| 7 | 8 | ~100 kS/s/channel |
+| 8 | 8 | ~100 kS/s/channel |
+
+`AA` selects arbitrary physical inputs.  Enabled inputs are compacted into the
+returned stream in ascending physical-channel order.  This was directly
+verified with CH1 carrying the onboard 1 kHz square reference and CH8 carrying
+an independent 4 kHz sine: `AA = CH1+CH8` produced a two-wide stream with CH1
+in lane 1 and CH8 in lane 2, both measuring ~400 kS/s/channel.
+
+For odd enabled counts greater than one, the final physical acquisition slot is
+unused/dummy rather than an implicitly enabled adjacent channel.  This was
+directly verified at every odd boundary by moving the independent 4 kHz source
+to the candidate adjacent input:
+
+- CH1..CH3 enabled: lane 4 remained quiet; explicitly enabling CH4 made the
+  4 kHz signal appear in lane 4 at ~200 kS/s.
+- CH1..CH5 enabled: lane 6 remained quiet; explicitly enabling CH6 made the
+  4 kHz signal appear in lane 6 at ~133.3 kS/s.
+- CH1..CH7 enabled: lane 8 remained quiet; explicitly enabling CH8 made the
+  4 kHz signal appear in lane 8 at ~100 kS/s.
+
+Changing `A0` between the logical enabled count and the rounded physical width
+did not change the observed odd-width geometry.  Therefore the exact semantic
+role of `A0` remains unresolved; production code must not infer more than the
+evidence supports.  The canonical configuration uses the logical enabled count
+for `A0` and the actual physical-channel mask for `AA`.
+
+The A3=0x0f multi-channel width/rate relationship has not yet been independently
+validated.  Production multi-channel support should therefore initially use
+the validated A3=0x11 family only; 2.4 MS/s remains a single-channel setting
+until equivalent hardware tests are complete.
