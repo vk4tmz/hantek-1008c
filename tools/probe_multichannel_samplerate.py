@@ -61,7 +61,12 @@ def plans_for(args: argparse.Namespace) -> list[AcquisitionPlan]:
     if args.suite in ("rate", "all"):
         for n in range(1, 9):
             logical = tuple(range(1, n + 1))
-            plans.append(make_plan(logical, a0_mode="width", aa_mode="width", name=f"rate-n{n}-windows-width"))
+            plans.append(make_plan(
+                logical,
+                a0_mode="logical",
+                aa_mode="logical",
+                name=f"rate-n{n}-canonical-mask",
+            ))
 
     if args.suite in ("semantics", "all"):
         # Isolate A0 from AA at each odd boundary. The four combinations answer
