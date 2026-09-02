@@ -51,24 +51,24 @@ claim.  Python results are protocol-lab evidence until hardware validation is
 complete.  Only then should the canonical Python acquisition API and the
 libsigrok production driver gain a multi-channel sampling model.
 
-## 2026-08-30 hardware-validated result
+## 2026-08-30 and 2026-09-01 hardware-validated result
 
-The A3=0x11 laboratory series is complete on the development unit.  The
+The A3=0x11 and A3=0x0F laboratory series are complete on the development unit.  The
 Windows-observed width table is now independently reproduced by Linux direct
 ADC captures and the routing semantics are hardware-validated.
 
 For N enabled physical channels, the acquisition stream width is:
 
-| Enabled channels | Physical width | Effective rate at A3=0x11 |
-|---:|---:|---:|
-| 1 | 1 | ~800 kS/s/channel |
-| 2 | 2 | ~400 kS/s/channel |
-| 3 | 4 | ~200 kS/s/channel |
-| 4 | 4 | ~200 kS/s/channel |
-| 5 | 6 | ~133.3 kS/s/channel |
-| 6 | 6 | ~133.3 kS/s/channel |
-| 7 | 8 | ~100 kS/s/channel |
-| 8 | 8 | ~100 kS/s/channel |
+| Enabled channels | Physical width | A3=0x11 | A3=0x0F |
+|---:|---:|---:|---:|
+| 1 | 1 | ~800 kS/s/channel | ~2.4 MS/s/channel |
+| 2 | 2 | ~400 kS/s/channel | ~1.2 MS/s/channel |
+| 3 | 4 | ~200 kS/s/channel | ~600 kS/s/channel |
+| 4 | 4 | ~200 kS/s/channel | ~600 kS/s/channel |
+| 5 | 6 | ~133.3 kS/s/channel | ~400 kS/s/channel |
+| 6 | 6 | ~133.3 kS/s/channel | ~400 kS/s/channel |
+| 7 | 8 | ~100 kS/s/channel | ~300 kS/s/channel |
+| 8 | 8 | ~100 kS/s/channel | ~300 kS/s/channel |
 
 `AA` selects arbitrary physical inputs.  Enabled inputs are compacted into the
 returned stream in ascending physical-channel order.  This was directly
@@ -94,7 +94,7 @@ role of `A0` remains unresolved; production code must not infer more than the
 evidence supports.  The canonical configuration uses the logical enabled count
 for `A0` and the actual physical-channel mask for `AA`.
 
-The A3=0x0f multi-channel width/rate relationship has not yet been independently
-validated.  Production multi-channel support should therefore initially use
-the validated A3=0x11 family only; 2.4 MS/s remains a single-channel setting
-until equivalent hardware tests are complete.
+The 2026-09-01 A3=0x0F canonical-mask matrix reproduced the same physical-width
+table and measured a ~2.4 Mword/s aggregate stream. For odd logical counts,
+candidate widths 4/6/8 recovered the 4 kHz CH1 reference with correlations near
+0.9996, while incorrect widths 3/5/7 produced materially poorer correlations.

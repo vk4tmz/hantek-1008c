@@ -6,7 +6,7 @@ import statistics
 from typing import Iterable, Sequence
 
 
-# Independently hardware-validated at A3=0x11 on 2026-08-30.
+# Independently hardware-validated at A3=0x11 on 2026-08-30 and A3=0x0F on 2026-09-01.
 VERIFIED_ACQUISITION_WIDTH = {1: 1, 2: 2, 3: 4, 4: 4, 5: 6, 6: 6, 7: 8, 8: 8}
 # Backward-compatible name retained for protocol-lab reports created before validation.
 WINDOWS_OBSERVED_WIDTH = VERIFIED_ACQUISITION_WIDTH
@@ -16,7 +16,7 @@ def observed_windows_width(logical_count: int) -> int:
     """Return the hardware-validated direct-ADC acquisition width.
 
     The function name is retained for compatibility with earlier lab tooling;
-    the 1,2,4,4,6,6,8,8 table is now independently validated at A3=0x11.
+    the 1,2,4,4,6,6,8,8 table is independently validated at A3=0x11 and 0x0F.
     """
     try:
         return WINDOWS_OBSERVED_WIDTH[int(logical_count)]
@@ -96,7 +96,7 @@ def acquisition_layout(channels: Sequence[int]) -> tuple[tuple[int, ...], int]:
 
     AA-selected channels are packed in ascending physical-channel order.  For
     odd counts 3, 5, and 7 the hardware adds one final dummy acquisition slot.
-    This layout is hardware-validated for direct ADC at A3=0x11.
+    This layout is hardware-validated for direct ADC at A3=0x11 and 0x0F.
     """
     logical = tuple(sorted(set(int(ch) for ch in channels)))
     if not logical or len(logical) != len(channels) or any(ch < 1 or ch > 8 for ch in logical):

@@ -1234,9 +1234,9 @@ whether the extra acquisition lane is the adjacent ADC input or padding/internal
 state.  Results from these experiments must be promoted into the canonical
 Python path and libsigrok only after hardware validation.
 
-## Hardware-validated multi-channel direct-ADC layout (2026-08-30)
+## Hardware-validated multi-channel direct-ADC layout (2026-08-30 and 2026-09-01)
 
-Linux direct-ADC captures now independently establish the A3=0x11
+Linux direct-ADC captures independently establish the A3=0x11 and A3=0x0F
 multi-channel stream layout.  `AA` selects arbitrary physical channels and the
 enabled channels are compacted into the returned stream in ascending physical
 channel order.  Sparse `CH1+CH8` was directly verified with independent 1 kHz
@@ -1258,5 +1258,6 @@ alter the observed geometry.  Its exact role therefore remains unresolved.
 Use the logical enabled count for canonical A0 writes and do not describe A0 as
 the physical acquisition-width selector.
 
-The equivalent multi-channel relationship at A3=0x0f is still unvalidated and
-must not be inferred from the A3=0x11 result.
+At A3=0x0F the same physical-width relationship was independently validated on
+2026-09-01. The aggregate stream is ~2.4 Mword/s, giving effective rates of
+2.4M,1.2M,600k,600k,400k,400k,300k,300k samples/s for 1..8 enabled channels.
