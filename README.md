@@ -101,6 +101,33 @@ Normal acquisition must never infer zero from whatever signal happens to be
 connected at startup. The Python tools and native libsigrok driver consume the
 same persisted calibration data.
 
+To work through several channels and ranges with explicit probe-movement
+prompts, while skipping already-complete entries by default, run:
+
+```bash
+python tools/calibrate_all_channels.py
+```
+
+Limit a session when desired, for example:
+
+```bash
+python tools/calibrate_all_channels.py --channels 2 3 --ranges 01 02 03
+```
+
+The orchestrator groups work by channel and physical connection. With a channel
+grounded it captures all selected zero calibrations consecutively, then asks for
+one move to the onboard reference and validates A2=02 and A2=03 consecutively.
+A2=01 records grounded zero only because the onboard 2 Vp-p reference
+over-ranges that sensitive state. The single-range tool retains its combined
+ground-to-reference workflow and sends the validated F3 echo every 500 ms while
+waiting, so its existing acquisition session remains present.
+
+Fresh device open/initialization tolerates temporary USB re-enumeration for up
+to 15 seconds, polling every 500 ms and continuing immediately on success. Any
+recovery sequence is logged with attempts and elapsed time. The multi-channel
+orchestrator offers to retry the current task or stop safely after a failure;
+individual acquisition commands are never blindly retried mid-sequence.
+
 ## Direction
 
 1. Confirm/document USB transport.

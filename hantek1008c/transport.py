@@ -86,10 +86,18 @@ class Hantek1008C:
             return
         if self._claimed:
             try:
-                usb.util.release_interface(self.dev,INTERFACE)
+                try:
+                    usb.util.release_interface(self.dev,INTERFACE)
+                except usb.core.USBError:
+                    # The device may have disconnected or re-enumerated. There
+                    # is no live interface left to release in that case.
+                    pass
             finally:
                 self._claimed=False
-        usb.util.dispose_resources(self.dev)
+        try:
+            usb.util.dispose_resources(self.dev)
+        except usb.core.USBError:
+            pass
         self.dev=None
 
     def __enter__(self):
