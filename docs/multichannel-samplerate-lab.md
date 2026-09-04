@@ -98,3 +98,47 @@ The 2026-09-01 A3=0x0F canonical-mask matrix reproduced the same physical-width
 table and measured a ~2.4 Mword/s aggregate stream. For odd logical counts,
 candidate widths 4/6/8 recovered the 4 kHz CH1 reference with correlations near
 0.9996, while incorrect widths 3/5/7 produced materially poorer correlations.
+
+## 2026-09-05 PulseView end-to-end validation
+
+The native libsigrok driver was exercised through PulseView on the development
+unit after independent A2=03 calibration was available for all eight physical
+channels. CH1 carried a 4 kHz sine wave. A 1 kHz / nominal 2 Vp-p square wave
+was moved successively through CH2 to CH8 as each channel-count boundary was
+tested. Other visible inputs were grounded where probes were available or left
+undriven; they did not acquire copies of either driven waveform.
+
+Every contiguous enabled-channel count passed at both production Triggered
+rates:
+
+| Enabled channels | Physical width | A3=0x0F rate | A3=0x11 rate | Samples/channel | Result |
+|---:|---:|---:|---:|---:|:---:|
+| 1 | 1 | 2.4 MSa/s | 800 kSa/s | 4000 | PASS |
+| 2 | 2 | 1.2 MSa/s | 400 kSa/s | 2000 | PASS |
+| 3 | 4 | 600 kSa/s | 200 kSa/s | 1000 | PASS |
+| 4 | 4 | 600 kSa/s | 200 kSa/s | 1000 | PASS |
+| 5 | 6 | 400 kSa/s | 133.333 kSa/s | 666 | PASS |
+| 6 | 6 | 400 kSa/s | 133.333 kSa/s | 666 | PASS |
+| 7 | 8 | 300 kSa/s | 100 kSa/s | 500 | PASS |
+| 8 | 8 | 300 kSa/s | 100 kSa/s | 500 | PASS |
+
+For the full eight-channel case, the fixed 4000-word hardware frame contains
+500 samples per channel. PulseView displayed approximately 1.667 ms at
+300 kSa/s/channel and exactly 5.000 ms at 100 kSa/s/channel. The corresponding
+waveform counts were approximately 6.67 and 20 cycles for the 4 kHz sine, and
+approximately 1.67 and 5 cycles for the 1 kHz square. This independently checks
+the sample-rate metadata against the visible time axis.
+
+![Eight calibrated channels at 300 kSa/s/channel](images/pulseview-8ch-300ksps-20260905.png)
+
+*PulseView at 300 kSa/s/channel: CH1 is the 4 kHz sine, CH8 is the 1 kHz square,
+and the visible frame spans approximately 1.667 ms.*
+
+![Eight calibrated channels at 100 kSa/s/channel](images/pulseview-8ch-100ksps-20260905.png)
+
+*PulseView at 100 kSa/s/channel: the same channel identities remain clean and
+the visible frame spans 5 ms.*
+
+The test also confirmed that odd channel counts expose only logical channels:
+the fourth, sixth, and eighth physical padding lanes for counts 3, 5, and 7 did
+not appear as extra PulseView traces or leak into visible channel data.

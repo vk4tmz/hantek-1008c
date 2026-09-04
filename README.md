@@ -18,6 +18,17 @@ OUT 0x02: F3
 IN  0x81: F3
 ```
 
+## Native libsigrok / PulseView status
+
+Triggered acquisition is hardware-validated in PulseView for every contiguous
+enabled-channel count from one through eight. The production driver exposes the
+two validated aggregate-rate families, applies independent persisted A2=03
+calibration per physical channel, and omits the unused final transport lane at
+odd channel counts 3, 5, and 7.
+
+The full validation matrix and eight-channel screenshots are retained in
+[`docs/multichannel-samplerate-lab.md`](docs/multichannel-samplerate-lab.md).
+
 ## Setup
 
 ```bash
@@ -203,7 +214,9 @@ X axis: sample index
 Y axis: raw 12-bit ADC counts
 ```
 
-No volts-per-count or sample-period calibration is applied yet.
+This legacy raw-capture plotting path intentionally displays ADC counts against
+sample index. Voltage and time calibration are applied separately by calibrated
+analysis paths and by the native libsigrok driver.
 
 
 ### Known-signal validation range
