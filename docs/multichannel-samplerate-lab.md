@@ -122,6 +122,23 @@ rates:
 | 7 | 8 | 300 kSa/s | 100 kSa/s | 500 | PASS |
 | 8 | 8 | 300 kSa/s | 100 kSa/s | 500 | PASS |
 
+The same PulseView validation was then extended across the complete Triggered
+A3=0x0F and A3=0x11..0x19 family in one build. CH1 carried a 20 Hz sine and a
+second enabled channel carried the onboard 1 kHz square. Every listed rate
+passed at physical widths 2, 4, 6 and 8:
+
+| Physical width | Validated samples/s/channel, slow to fast |
+|---:|---|
+| 2 | 1k, 2k, 4k, 10k, 20k, 40k, 100k, 200k, 400k, 1.2M |
+| 4 | 500, 1k, 2k, 5k, 10k, 20k, 50k, 100k, 200k, 600k |
+| 6 | 333, 666, 1.333k, 3.333k, 6.666k, 13.333k, 33.333k, 66.666k, 133.333k, 400k |
+| 8 | 250, 500, 1k, 2.5k, 5k, 10k, 25k, 50k, 100k, 300k |
+
+Frame spans and visible reference-waveform cycle counts agreed with the
+advertised per-channel rates. No A3-specific routing or waveform corruption
+was observed. This promotes A3=0x12..0x19 from a timebase-derived candidate
+model to hardware-validated multichannel Triggered operation.
+
 For the full eight-channel case, the fixed 4000-word hardware frame contains
 500 samples per channel. PulseView displayed approximately 1.667 ms at
 300 kSa/s/channel and exactly 5.000 ms at 100 kSa/s/channel. The corresponding
