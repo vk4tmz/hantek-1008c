@@ -11,12 +11,19 @@ from hantek1008c.calibration import (
     DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS, calibration_path, estimate_onboard_reference_scale,
     load_zero_calibration, replace_voltage_scale, save_zero_calibration,
 )
-from hantek1008c.vertical import nominal_volts_per_count
+from hantek1008c.vertical import (
+    nominal_volts_per_count,
+    parse_range as parse_range_name,
+    range_description,
+)
 
 def parse_range(v: str) -> int:
-    r=int(v,16)
+    try:
+        r=parse_range_name(v)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
     if r not in (2,3):
-        raise argparse.ArgumentTypeError("onboard 2 Vp-p scale calibration supports A2 02 or 03; A2 01 clips")
+        raise argparse.ArgumentTypeError("onboard 2 Vp-p scale calibration supports Medium or Wide; Narrow clips")
     return r
 
 def main() -> int:
@@ -37,7 +44,11 @@ def main() -> int:
             cid=scope.connection_id
             old=load_zero_calibration(cid,args.channel,args.range_id)
             if old is None:
-                print(f"ERROR: no stored zero calibration for {cid} CH{args.channel} A2={args.range_id:02X}",file=sys.stderr); return 5
+                print(
+                    f"ERROR: no stored zero calibration for {cid} CH{args.channel} "
+                    f"{range_description(args.range_id)}", file=sys.stderr
+                )
+                return 5
             sess=DirectADCSession(scope,cfg); sess.initialize()
             frames=[sess.acquire_words() for _ in range(args.triggered_acquisitions)]
     except HantekUSBError as exc:
@@ -45,7 +56,7 @@ def main() -> int:
     scale,span=estimate_onboard_reference_scale(frames,args.expected_vpp)
     nominal=nominal_volts_per_count(args.range_id)
     print(f"Device: {cid}")
-    print(f"CH{args.channel} A2={args.range_id:02X}: plateau span={span:.3f} counts")
+    print(f"CH{args.channel} {range_description(args.range_id)}: plateau span={span:.3f} counts")
     print(f"Reference nominal scale: {nominal:.9g} V/count")
     print(f"Measured working scale: {scale:.9g} V/count")
     print(f"Difference from nominal: {(scale/nominal-1)*100:+.2f}%")

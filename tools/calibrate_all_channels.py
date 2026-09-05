@@ -11,6 +11,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hantek1008c.calibration import calibration_path, section_name
+from hantek1008c.vertical import parse_range as parse_range_name
+from hantek1008c.vertical import range_description, range_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,10 +20,10 @@ CALIBRATE_ZERO = ROOT / "tools" / "calibrate_zero.py"
 
 
 def parse_range(value: str) -> int:
-    result = int(value, 16)
-    if result not in (1, 2, 3):
-        raise argparse.ArgumentTypeError("range must be one of 01, 02, 03")
-    return result
+    try:
+        return parse_range_name(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def load_store() -> ConfigParser:
@@ -59,7 +61,7 @@ def calibrate(channel: int, range_id: int, *, validation_only: bool) -> int:
         "--channel",
         str(channel),
         "--range",
-        f"{range_id:02X}",
+        range_name(range_id),
     ]
     if validation_only:
         command.extend(
@@ -80,7 +82,7 @@ def run_with_retry(channel: int, range_id: int, *, validation_only: bool) -> int
             return 0
         print("\n[Calibration task failed]")
         print(f"  - Channel: CH{channel}")
-        print(f"  - Range: A2={range_id:02X}")
+        print(f"  - Range: {range_description(range_id)}")
         print(f"  - Operation: {operation}")
         print(f"  - Exit code: {result}")
         while True:
@@ -117,8 +119,8 @@ def main() -> int:
         type=parse_range,
         nargs="+",
         default=[1, 2, 3],
-        metavar="HEX",
-        help="A2 ranges to process (default: 01 02 03)",
+        metavar="RANGE",
+        help="ranges to process (default: Narrow Medium Wide)",
     )
     parser.add_argument(
         "--recalibrate",
@@ -169,15 +171,15 @@ def main() -> int:
     for channel, zero_ranges, validation_ranges in work:
         print(f"  - CH{channel}")
         if zero_ranges:
-            joined = ", ".join(f"A2={range_id:02X}" for range_id in zero_ranges)
+            joined = ", ".join(range_description(range_id) for range_id in zero_ranges)
             print(f"      Grounded zero: {joined}")
         if validation_ranges:
             joined = ", ".join(
-                f"A2={range_id:02X}" for range_id in validation_ranges
+                range_description(range_id) for range_id in validation_ranges
             )
             print(f"      Onboard reference: {joined}")
     print(
-        "\nA2=01 deliberately skips the onboard 2 Vp-p reference because that "
+        "\nNarrow (A2=01) deliberately skips the onboard 2 Vp-p reference because that "
         "signal over-ranges the sensitive input state."
     )
     input("\nPress Enter to begin, or Ctrl-C to stop... ")
@@ -189,13 +191,14 @@ def main() -> int:
         print(f"  - Channel: CH{channel}")
 
         if zero_ranges:
-            joined = ", ".join(f"A2={range_id:02X}" for range_id in zero_ranges)
+            joined = ", ".join(range_description(range_id) for range_id in zero_ranges)
             print("\n[Connection 1: scope ground]")
             print(f"  Connect the CH{channel} probe input to scope ground.")
             print(f"  The following ranges will run without another cable move: {joined}")
             input("\nPress Enter when CH%d is grounded, or Ctrl-C to stop... " % channel)
             for range_id in zero_ranges:
-                print(f"\n--- CH{channel} grounded zero, A2={range_id:02X} ---")
+                print(f"\n--- CH{channel} grounded zero, "
+                      f"{range_description(range_id)} ---")
                 result = run_with_retry(
                     channel, range_id, validation_only=False
                 )
@@ -204,7 +207,7 @@ def main() -> int:
 
         if validation_ranges:
             joined = ", ".join(
-                f"A2={range_id:02X}" for range_id in validation_ranges
+                range_description(range_id) for range_id in validation_ranges
             )
             print("\n[Connection 2: onboard reference]")
             print(
@@ -213,7 +216,8 @@ def main() -> int:
             print(f"  The following ranges will run without another cable move: {joined}")
             input("\nPress Enter when CH%d is on the reference, or Ctrl-C to stop... " % channel)
             for range_id in validation_ranges:
-                print(f"\n--- CH{channel} reference validation, A2={range_id:02X} ---")
+                print(f"\n--- CH{channel} reference validation, "
+                      f"{range_description(range_id)} ---")
                 result = run_with_retry(
                     channel, range_id, validation_only=True
                 )

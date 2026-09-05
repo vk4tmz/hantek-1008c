@@ -94,10 +94,10 @@ physical USB port path plus channel and A2 range; this avoids silently sharing
 calibration between two identical scopes until a stable device serial identity
 is proven.
 
-For the current CH1 / A2=03 MVP:
+For the current CH1 / Wide (A2=03) MVP:
 
 ```bash
-python tools/calibrate_zero.py --channel 1 --range 03
+python tools/calibrate_zero.py --channel 1 --range Wide
 ```
 
 The tool performs two deliberately separate phases:
@@ -122,8 +122,13 @@ python tools/calibrate_all_channels.py
 Limit a session when desired, for example:
 
 ```bash
-python tools/calibrate_all_channels.py --channels 2 3 --ranges 01 02 03
+python tools/calibrate_all_channels.py --channels 2 3 --ranges Narrow Medium Wide
 ```
+
+The public range names are `Narrow`, `Medium`, and `Wide`, corresponding to raw
+A2=01, A2=02, and A2=03. Calibration tools retain `01`, `02`, `03`, and
+`A2=01`, `A2=02`, `A2=03` as backward-compatible expert aliases. Raw A2 values
+remain in stored evidence and diagnostic output.
 
 The orchestrator groups work by channel and physical connection. With a channel
 grounded it captures all selected zero calibrations consecutively, then asks for

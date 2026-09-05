@@ -22,13 +22,14 @@ from hantek1008c.calibration import (
     save_zero_calibration,
     validate_onboard_reference,
 )
+from hantek1008c.vertical import parse_range, range_description
 
 
 def parse_byte(value: str) -> int:
-    result = int(value, 16)
-    if result not in (1, 2, 3):
-        raise argparse.ArgumentTypeError("range must be one of 01, 02, 03")
-    return result
+    try:
+        return parse_range(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def prompt(message: str, assume_yes: bool) -> None:
@@ -158,7 +159,7 @@ def main() -> int:
     cfg = DirectADCConfig(channel=args.channel, a3=0x0F, range_id=args.range_id)
     print("\nCalibration target")
     print(f"  - Channel: CH{args.channel}")
-    print(f"  - Range: A2={args.range_id:02X}")
+    print(f"  - Range: {range_description(args.range_id)}")
     print(f"  - Sample rate: {cfg.sample_rate/1e6:.3f} MS/s")
     print(f"  - Store: {calibration_path()}\n")
 
@@ -181,7 +182,7 @@ def main() -> int:
                 if cal is None:
                     print(
                         f"ERROR: no saved zero calibration for {connection_id} "
-                        f"CH{args.channel} A2={args.range_id:02X}.",
+                        f"CH{args.channel} {range_description(args.range_id)}.",
                         file=sys.stderr,
                     )
                     return 7
@@ -251,7 +252,7 @@ def main() -> int:
             print("\n  Saved zero calibration")
             print(f"    - Path: {path}")
             print(
-                f"    - Nominal A2={args.range_id:02X} scale: "
+                f"    - Nominal {range_description(args.range_id)} scale: "
                 f"{cal.volts_per_count:.9g} V/count\n"
             )
 

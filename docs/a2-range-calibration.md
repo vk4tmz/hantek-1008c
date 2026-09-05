@@ -1,6 +1,7 @@
 # A2 range calibration
 
-A2=01, 02 and 03 are validated hardware gain/range states. Calibration is split
+Narrow, Medium, and Wide are the user-facing names for the validated A2=01,
+A2=02, and A2=03 hardware gain/range states. Calibration is split
 into two independent pieces:
 
 1. **Zero calibration**: grounded input establishes a per-device, per-channel,
@@ -18,13 +19,13 @@ as the working per-device scale.
 Example report-only run:
 
 ```bash
-python tools/calibrate_onboard_scale.py --channel 1 --range 03
+python tools/calibrate_onboard_scale.py --channel 1 --range Wide
 ```
 
 Explicit persistence:
 
 ```bash
-python tools/calibrate_onboard_scale.py --channel 1 --range 03 --save-scale
+python tools/calibrate_onboard_scale.py --channel 1 --range Wide --save-scale
 ```
 
 Do not use the onboard 2 Vp-p source to calibrate A2=01: it over-ranges that

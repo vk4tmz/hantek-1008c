@@ -2,7 +2,13 @@ from pathlib import Path
 import json
 import numpy as np
 from hantek1008c.offline import estimate_delta_center, square_sample_rate
-from hantek1008c.vertical import REFERENCE_VSCALE_BY_A2, reference_volts_per_delta_count
+from hantek1008c.vertical import (
+    REFERENCE_VSCALE_BY_A2,
+    parse_range,
+    range_description,
+    range_name,
+    reference_volts_per_delta_count,
+)
 
 FIX=Path(__file__).parent/"fixtures"/"a2_1khz"
 
@@ -32,6 +38,14 @@ def test_reference_supported_ids_are_exactly_1_2_3():
     assert reference_volts_per_delta_count(1)==0.0002
     assert reference_volts_per_delta_count(2)==0.00125
     assert reference_volts_per_delta_count(3)==0.01
+
+def test_public_range_names_and_raw_aliases():
+    assert [range_name(value) for value in (1, 2, 3)] == [
+        "Narrow", "Medium", "Wide"
+    ]
+    assert range_description(2) == "Medium (A2=02)"
+    for alias in ("Medium", "medium", "02", "A2=02", "a2=02"):
+        assert parse_range(alias) == 2
 
 def test_supported_a2_02_and_03_are_consistent_with_nominal_2vpp():
     s=samples()
