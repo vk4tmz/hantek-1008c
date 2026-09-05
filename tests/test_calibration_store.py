@@ -1,13 +1,17 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from hantek1008c.calibration import (
     build_zero_calibration,
+    load_max_zero_shift_counts,
     load_zero_calibration,
+    save_max_zero_shift_counts,
     save_reference_validation,
     save_zero_calibration,
     section_name,
+    validate_zero_candidate,
     validate_onboard_reference,
 )
 
@@ -89,6 +93,42 @@ def test_zero_calibration_round_trip(tmp_path: Path):
     assert loaded.volts_per_count == pytest.approx(0.01)
     assert loaded.volts(2201) == pytest.approx(2.0)
     assert load_zero_calibration("usb/1-2.3", 2, 3, path) is None
+
+
+def test_first_zero_must_be_in_plausible_midscale_region():
+    candidate = build_zero_calibration("usb/1-2.3", 1, 3, [2015] * 100)
+    assert validate_zero_candidate(candidate, None, 20) is None
+
+    implausible = replace(candidate, zero_adc=1700.0)
+    with pytest.raises(ValueError, match="outside the plausible"):
+        validate_zero_candidate(implausible, None, 20)
+
+
+def test_existing_zero_shift_is_limited():
+    previous = build_zero_calibration("usb/1-2.3", 1, 3, [2015] * 100)
+    nearby = replace(previous, zero_adc=2029.0)
+    assert validate_zero_candidate(nearby, previous, 20) == pytest.approx(14.0)
+
+    anomalous = replace(previous, zero_adc=1969.0)
+    with pytest.raises(ValueError, match="exceeds the permitted"):
+        validate_zero_candidate(anomalous, previous, 20)
+    assert validate_zero_candidate(anomalous, previous, 50) == pytest.approx(-46.0)
+
+
+def test_device_zero_shift_policy_round_trip(tmp_path: Path):
+    path = tmp_path / "calibration.ini"
+    value, source = load_max_zero_shift_counts("usb/1-2.3", path)
+    assert value == pytest.approx(20.0)
+    assert source == "default"
+
+    save_max_zero_shift_counts("usb/1-2.3", 50, path)
+    value, source = load_max_zero_shift_counts("usb/1-2.3", path)
+    assert value == pytest.approx(50.0)
+    assert source == "saved device policy"
+
+    other_value, other_source = load_max_zero_shift_counts("usb/9-9", path)
+    assert other_value == pytest.approx(20.0)
+    assert other_source == "default"
 
 
 def test_loads_libsigrok_generated_calibration_store(tmp_path: Path):

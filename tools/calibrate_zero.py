@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 import sys
 import threading
@@ -17,9 +18,12 @@ from hantek1008c.calibration import (
     DEFAULT_ZERO_TRIGGERED_ACQUISITIONS,
     build_zero_calibration,
     calibration_path,
+    load_max_zero_shift_counts,
     load_zero_calibration,
+    save_max_zero_shift_counts,
     save_reference_validation,
     save_zero_calibration,
+    validate_zero_candidate,
     validate_onboard_reference,
 )
 from hantek1008c.vertical import parse_range, range_description
@@ -134,6 +138,15 @@ def main() -> int:
     parser.add_argument("--validation-triggered_acquisitions", type=int, default=DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS)
     parser.add_argument("--max-zero-stddev", type=float, default=5.0)
     parser.add_argument("--max-zero-span", type=int, default=32)
+    parser.add_argument(
+        "--max-zero-shift-counts",
+        type=float,
+        help=(
+            "maximum permitted change from an existing zero calibration; "
+            "a successful grounded calibration persists this device policy "
+            "(default: saved policy or 20 counts)"
+        ),
+    )
     parser.add_argument("--skip-validation", action="store_true")
     parser.add_argument(
         "--validation-only",
@@ -155,6 +168,11 @@ def main() -> int:
         parser.error("--suppress-connection-instructions requires --yes")
     if args.zero_triggered_acquisitions < 1 or args.validation_triggered_acquisitions < 1:
         parser.error("Triggered acquisition counts must be >= 1")
+    if args.max_zero_shift_counts is not None and (
+        not math.isfinite(args.max_zero_shift_counts)
+        or args.max_zero_shift_counts <= 0
+    ):
+        parser.error("--max-zero-shift-counts must be > 0")
 
     cfg = DirectADCConfig(channel=args.channel, a3=0x0F, range_id=args.range_id)
     print("\nCalibration target")
@@ -168,6 +186,8 @@ def main() -> int:
             prompt(
                 f"[Reference validation]\n"
                 f"  Connect CH{args.channel} to the onboard 1 kHz / 2 Vp-p output.\n"
+                "  Connect the reference only to this target channel.\n"
+                "  Disconnect or ground every other scope input.\n"
                 "  The existing saved zero and voltage scale will not be modified.",
                 args.yes,
             )
@@ -214,8 +234,10 @@ def main() -> int:
     if not args.suppress_connection_instructions:
         prompt(
             f"[Phase 1: grounded zero]\n"
-            f"  Connect the CH{args.channel} probe input to scope ground.\n"
-            "  This establishes the zero ADC offset.",
+            f"  - Connect the CH{args.channel} probe input to scope ground.\n"
+            "  - Disconnect or ground every other scope input.\n"
+            "  - Do not leave the onboard reference connected to another channel.\n"
+            "  - This establishes the zero ADC offset.",
             args.yes,
         )
 
@@ -248,6 +270,40 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 5
+            previous = load_zero_calibration(
+                connection_id, args.channel, args.range_id
+            )
+            if args.max_zero_shift_counts is None:
+                max_shift, policy_source = load_max_zero_shift_counts(connection_id)
+            else:
+                max_shift = args.max_zero_shift_counts
+                policy_source = "command line"
+
+            print("\n  Zero-calibration safeguard")
+            if previous is None:
+                print("    - Existing zero: none (first calibration for this entry)")
+            else:
+                print(f"    - Existing zero: {previous.zero_adc:.3f} counts")
+            print(f"    - Candidate zero: {cal.zero_adc:.3f} counts")
+            print(f"    - Maximum permitted shift: +/-{max_shift:g} counts")
+            print(f"    - Policy source: {policy_source}")
+            try:
+                shift = validate_zero_candidate(cal, previous, max_shift)
+            except ValueError as exc:
+                print(f"    - Result: REJECTED\n\nERROR: {exc}.", file=sys.stderr)
+                print(
+                    "The existing calibration and saved policy were not modified. "
+                    "Verify that the probe input is grounded and retry.",
+                    file=sys.stderr,
+                )
+                return 9
+            if shift is not None:
+                print(f"    - Change: {shift:+.3f} counts")
+            print("    - Result: PASS")
+
+            if args.max_zero_shift_counts is not None:
+                save_max_zero_shift_counts(connection_id, max_shift)
+                print(f"    - Saved device policy: +/-{max_shift:g} counts")
             path = save_zero_calibration(cal)
             print("\n  Saved zero calibration")
             print(f"    - Path: {path}")
@@ -265,6 +321,8 @@ def main() -> int:
                 scope,
                 f"[Phase 2: reference validation]\n"
                 f"  Connect CH{args.channel} to the onboard 1 kHz / 2 Vp-p output.\n"
+                "  Connect the reference only to this target channel.\n"
+                "  Disconnect or ground every other scope input.\n"
                 "  This validates the saved calibration but does not modify it.",
                 args.yes,
             )

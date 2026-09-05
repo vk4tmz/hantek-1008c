@@ -120,11 +120,23 @@ sigrok-hantek-1008c-calibrate \
     --ranges Narrow,Medium,Wide
 ```
 
+To set and remember a maximum permitted change from an existing grounded zero,
+add (for example) `--max-zero-shift-counts 50`. The default is 20 ADC counts.
+An explicitly supplied limit is saved per device after a successful grounded
+capture and is reused by later runs. A rejected capture leaves the known-good
+entry and saved limit unchanged.
+
 For each channel the utility first captures all requested grounded ranges, then
 asks for one move to the onboard 1 kHz / nominal 2 Vp-p reference and validates
 Medium and Wide. Narrow receives grounded-zero calibration only because that
 reference over-ranges the sensitive Narrow state. Reference validation never
 changes `zero_adc` or `volts_per_count`.
+
+For grounded capture, disconnect or ground every input other than the grounded
+target; never leave the onboard reference connected to another channel. For
+reference validation, connect the reference only to the target channel and
+disconnect or ground every other input. A reference left on another input has
+been experimentally shown to contaminate the grounded capture.
 
 The utility retries complete fresh captures for up to 15 seconds after a
 transient USB disappearance or timeout and logs every recovery attempt. It

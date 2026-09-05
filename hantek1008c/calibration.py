@@ -18,6 +18,10 @@ from typing import Iterable, Sequence
 from .vertical import nominal_volts_per_count
 
 FORMAT_VERSION = 1
+ADC_MAX = 4095
+FIRST_ZERO_MIN = 0.45 * ADC_MAX
+FIRST_ZERO_MAX = 0.55 * ADC_MAX
+DEFAULT_MAX_ZERO_SHIFT_COUNTS = 20.0
 DEFAULT_ZERO_TRIGGERED_ACQUISITIONS = 3
 DEFAULT_VALIDATION_TRIGGERED_ACQUISITIONS = 3
 
@@ -39,6 +43,12 @@ def section_name(connection_id: str, channel: int, range_id: int) -> str:
     if range_id not in (1, 2, 3):
         raise ValueError("range_id must be one of the validated A2 ranges 01..03")
     return f"device {connection_id} channel CH{channel} range {range_id:02X}"
+
+
+def policy_section_name(connection_id: str) -> str:
+    if not connection_id:
+        raise ValueError("connection_id must not be empty")
+    return f"calibration policy {connection_id}"
 
 
 @dataclass(frozen=True)
@@ -84,6 +94,74 @@ def _load_parser(path: Path) -> ConfigParser:
     if path.exists():
         parser.read(path, encoding="utf-8")
     return parser
+
+
+def load_max_zero_shift_counts(
+    connection_id: str,
+    path: Path | None = None,
+) -> tuple[float, str]:
+    """Return the device policy and whether it was saved or defaulted."""
+    path = calibration_path() if path is None else Path(path)
+    parser = _load_parser(path)
+    section = policy_section_name(connection_id)
+    if not parser.has_option(section, "max_zero_shift_counts"):
+        return DEFAULT_MAX_ZERO_SHIFT_COUNTS, "default"
+    value = parser.getfloat(section, "max_zero_shift_counts")
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError("invalid saved max_zero_shift_counts policy")
+    return value, "saved device policy"
+
+
+def save_max_zero_shift_counts(
+    connection_id: str,
+    value: float,
+    path: Path | None = None,
+) -> Path:
+    """Persist the maximum accepted same-entry zero change for one device."""
+    value = float(value)
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError("max_zero_shift_counts must be finite and > 0")
+    path = calibration_path() if path is None else Path(path)
+    parser = _load_parser(path)
+    if not parser.has_section("format"):
+        parser.add_section("format")
+    parser.set("format", "version", str(FORMAT_VERSION))
+    section = policy_section_name(connection_id)
+    if not parser.has_section(section):
+        parser.add_section(section)
+    parser.set(section, "max_zero_shift_counts", f"{value:.9g}")
+    parser.set(section, "updated_utc", datetime.now(timezone.utc).isoformat())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        parser.write(fh)
+    os.replace(tmp, path)
+    return path
+
+
+def validate_zero_candidate(
+    candidate: "ZeroCalibration",
+    previous: "ZeroCalibration | None",
+    max_zero_shift_counts: float,
+) -> float | None:
+    """Validate absolute first-run plausibility or change from a stored zero."""
+    limit = float(max_zero_shift_counts)
+    if not math.isfinite(limit) or limit <= 0:
+        raise ValueError("max_zero_shift_counts must be finite and > 0")
+    if not FIRST_ZERO_MIN <= candidate.zero_adc <= FIRST_ZERO_MAX:
+        raise ValueError(
+            f"candidate zero {candidate.zero_adc:.3f} is outside the plausible "
+            f"{FIRST_ZERO_MIN:.0f}..{FIRST_ZERO_MAX:.0f} count region"
+        )
+    if previous is None:
+        return None
+    shift = candidate.zero_adc - previous.zero_adc
+    if abs(shift) > limit:
+        raise ValueError(
+            f"candidate zero shift {shift:+.3f} counts exceeds "
+            f"the permitted +/-{limit:.3f} counts"
+        )
+    return shift
 
 
 def save_zero_calibration(cal: ZeroCalibration, path: Path | None = None) -> Path:

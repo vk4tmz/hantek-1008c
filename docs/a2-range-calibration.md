@@ -74,6 +74,35 @@ section and field schema as the Python calibration module. A regression test in
 records emitted by that utility, including its reference-validation metadata.
 This keeps the cross-project calibration contract explicit.
 
+## Zero-calibration safeguard
+
+Both Python calibration tools and the installed libsigrok utility apply the
+same checks before replacing a grounded-zero value:
+
+- A first calibration must lie within the central 45–55% of the 12-bit ADC
+  range (approximately 1843–2252 counts).
+- A replacement must be within 20 counts of the existing value by default.
+- `--max-zero-shift-counts N` selects another positive limit. After a
+  successful grounded calibration, that explicit limit is stored as a
+  device-wide policy in `[calibration policy <USB connection>]`.
+- If no explicit value is supplied, a saved device policy is used; otherwise
+  the 20-count default applies.
+
+The comparison is always against the same device, channel, and range. A
+rejected candidate does not modify either the calibration entry or policy.
+This guard detects a session-wide shifted ADC baseline while still allowing an
+operator to deliberately choose a larger tolerance when measurements justify
+it.
+
+Calibration also requires strict input isolation. During grounded-zero capture,
+the target input must be grounded and every other input must be disconnected or
+grounded. In particular, do not leave the onboard reference connected to a
+different channel. During reference validation, connect it only to the target
+channel and disconnect or ground all others. Testing reproduced excessive
+grounded-channel noise when the reference remained connected to either CH2 or
+CH8 while CH1 was being calibrated; the noise-quality check correctly rejected
+both captures before they could be saved.
+
 After the final input-range/startup integration changed the observed grounded
 baseline, all 24 channel/range zero entries were regenerated with the production
 utility. Medium and Wide reference validation passed on all eight channels. This

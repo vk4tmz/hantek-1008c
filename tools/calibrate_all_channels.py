@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from configparser import ConfigParser
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -54,7 +55,13 @@ def has_validation(connection_id: str, channel: int, range_id: int) -> bool:
     )
 
 
-def calibrate(channel: int, range_id: int, *, validation_only: bool) -> int:
+def calibrate(
+    channel: int,
+    range_id: int,
+    *,
+    validation_only: bool,
+    max_zero_shift_counts: float | None,
+) -> int:
     command = [
         sys.executable,
         str(CALIBRATE_ZERO),
@@ -71,13 +78,28 @@ def calibrate(channel: int, range_id: int, *, validation_only: bool) -> int:
         command.extend(
             ("--skip-validation", "--yes", "--suppress-connection-instructions")
         )
+        if max_zero_shift_counts is not None:
+            command.extend(
+                ("--max-zero-shift-counts", str(max_zero_shift_counts))
+            )
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 
-def run_with_retry(channel: int, range_id: int, *, validation_only: bool) -> int:
+def run_with_retry(
+    channel: int,
+    range_id: int,
+    *,
+    validation_only: bool,
+    max_zero_shift_counts: float | None,
+) -> int:
     operation = "reference validation" if validation_only else "grounded zero"
     while True:
-        result = calibrate(channel, range_id, validation_only=validation_only)
+        result = calibrate(
+            channel,
+            range_id,
+            validation_only=validation_only,
+            max_zero_shift_counts=max_zero_shift_counts,
+        )
         if result == 0:
             return 0
         print("\n[Calibration task failed]")
@@ -127,7 +149,20 @@ def main() -> int:
         action="store_true",
         help="process entries that are already complete",
     )
+    parser.add_argument(
+        "--max-zero-shift-counts",
+        type=float,
+        help=(
+            "maximum permitted change from an existing zero calibration; "
+            "forwarded to grounded-zero tasks and persisted as device policy"
+        ),
+    )
     args = parser.parse_args()
+    if args.max_zero_shift_counts is not None and (
+        not math.isfinite(args.max_zero_shift_counts)
+        or args.max_zero_shift_counts <= 0
+    ):
+        parser.error("--max-zero-shift-counts must be > 0")
 
     from hantek1008c import Hantek1008C, HantekUSBError
 
@@ -182,6 +217,10 @@ def main() -> int:
         "\nNarrow (A2=01) deliberately skips the onboard 2 Vp-p reference because that "
         "signal over-ranges the sensitive input state."
     )
+    print(
+        "\nConnection rule: during every grounded capture, disconnect or ground all "
+        "other inputs. Never leave the onboard reference connected to another channel."
+    )
     input("\nPress Enter to begin, or Ctrl-C to stop... ")
 
     total = len(work)
@@ -193,14 +232,19 @@ def main() -> int:
         if zero_ranges:
             joined = ", ".join(range_description(range_id) for range_id in zero_ranges)
             print("\n[Connection 1: scope ground]")
-            print(f"  Connect the CH{channel} probe input to scope ground.")
-            print(f"  The following ranges will run without another cable move: {joined}")
+            print(f"  - Connect the CH{channel} probe input to scope ground.")
+            print("  - Disconnect or ground every other scope input.")
+            print("  - Do not leave the onboard reference connected to another channel.")
+            print(f"  - These ranges will run without another cable move: {joined}")
             input("\nPress Enter when CH%d is grounded, or Ctrl-C to stop... " % channel)
             for range_id in zero_ranges:
                 print(f"\n--- CH{channel} grounded zero, "
                       f"{range_description(range_id)} ---")
                 result = run_with_retry(
-                    channel, range_id, validation_only=False
+                    channel,
+                    range_id,
+                    validation_only=False,
+                    max_zero_shift_counts=args.max_zero_shift_counts,
                 )
                 if result != 0:
                     return result
@@ -213,13 +257,18 @@ def main() -> int:
             print(
                 f"  Move the CH{channel} probe to the onboard 1 kHz / 2 Vp-p output."
             )
+            print("  Connect the reference only to this target channel.")
+            print("  Disconnect or ground every other scope input.")
             print(f"  The following ranges will run without another cable move: {joined}")
             input("\nPress Enter when CH%d is on the reference, or Ctrl-C to stop... " % channel)
             for range_id in validation_ranges:
                 print(f"\n--- CH{channel} reference validation, "
                       f"{range_description(range_id)} ---")
                 result = run_with_retry(
-                    channel, range_id, validation_only=True
+                    channel,
+                    range_id,
+                    validation_only=True,
+                    max_zero_shift_counts=None,
                 )
                 if result != 0:
                     return result

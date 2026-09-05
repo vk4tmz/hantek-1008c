@@ -128,6 +128,21 @@ Limit a session when desired, for example:
 python tools/calibrate_all_channels.py --channels 2 3 --ranges Narrow Medium Wide
 ```
 
+Grounded-zero captures are protected against an implausible first calibration
+and against unexpectedly replacing an existing value. By default, an existing
+per-device/channel/range zero may move by at most 20 ADC counts. To choose and
+persist a different device-wide limit, for example 50 counts, use:
+
+```sh
+python tools/calibrate_all_channels.py --recalibrate \
+    --max-zero-shift-counts 50
+```
+
+The successful grounded capture stores this setting in the shared calibration
+file under `[calibration policy <USB connection>]`. Later runs use the saved
+policy when the option is omitted. A rejected capture changes neither the
+existing calibration nor the saved policy.
+
 The public range names are `Narrow`, `Medium`, and `Wide`, corresponding to raw
 A2=01, A2=02, and A2=03. Calibration tools retain `01`, `02`, `03`, and
 `A2=01`, `A2=02`, `A2=03` as backward-compatible expert aliases. Raw A2 values
@@ -136,6 +151,11 @@ remain in stored evidence and diagnostic output.
 The orchestrator groups work by channel and physical connection. With a channel
 grounded it captures all selected zero calibrations consecutively, then asks for
 one move to the onboard reference and validates A2=02 and A2=03 consecutively.
+A grounded calibration requires every other input to be disconnected or
+grounded; the onboard reference must not remain connected to another channel.
+During reference validation, connect the reference only to the target channel
+and disconnect or ground the remaining inputs. Leaving the reference connected
+elsewhere has been observed to make a grounded channel noisy and invalid.
 A2=01 records grounded zero only because the onboard 2 Vp-p reference
 over-ranges that sensitive state. The single-range tool retains its combined
 ground-to-reference workflow and sends the validated F3 echo every 500 ms while
