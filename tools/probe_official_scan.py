@@ -50,6 +50,7 @@ from hantek1008c.scan_protocol import (
     scan_ch1_observations,
     scan_observation_rate,
 )
+from hantek1008c.multichannel import mask_for_channels, observed_windows_width
 
 
 def digest(data: bytes) -> str:
@@ -76,8 +77,89 @@ def read_one_ca(scope, timeout_ms: int) -> bytes:
     return packet
 
 
-def run_profile(profile_name: str, args, stamp: str) -> dict:
+def parse_channel_counts(value: str) -> tuple[int, ...]:
+    if value == "all-desc":
+        return tuple(range(8, 0, -1))
+    try:
+        counts = tuple(int(part.strip()) for part in value.split(",") if part.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("channel counts must be comma-separated integers 1..8") from exc
+    if not counts or any(count < 1 or count > 8 for count in counts):
+        raise argparse.ArgumentTypeError("channel counts must contain values in 1..8")
+    if len(set(counts)) != len(counts):
+        raise argparse.ArgumentTypeError("channel counts must not contain duplicates")
+    return counts
+
+
+def parse_channel_sets(value: str) -> tuple[tuple[int, ...], ...]:
+    sets = []
+    try:
+        for group in value.split(";"):
+            channels = tuple(
+                sorted(int(part.strip()) for part in group.split(",") if part.strip())
+            )
+            if not channels or any(channel < 1 or channel > 8 for channel in channels):
+                raise ValueError
+            if len(set(channels)) != len(channels):
+                raise ValueError
+            sets.append(channels)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "channel sets must look like '1,8;2,5;1,2,5,8'"
+        ) from exc
+    if not sets or len(set(sets)) != len(sets):
+        raise argparse.ArgumentTypeError("channel sets must be non-empty and unique")
+    return tuple(sets)
+
+
+def lane_statistics(values: list[int]) -> dict:
+    return {
+        "samples": len(values),
+        "min": min(values) if values else None,
+        "max": max(values) if values else None,
+        "span": (max(values) - min(values)) if values else None,
+        "mean": (sum(values) / len(values)) if values else None,
+    }
+
+
+def multichannel_candidate_views(words: list[int], logical_count: int) -> dict:
+    """Expose competing structural views without choosing a Scan layout."""
+    width = observed_windows_width(logical_count)
+
+    complete_word_rows = len(words) // width
+    word_interleaved = [
+        [words[row * width + lane] for row in range(complete_word_rows)]
+        for lane in range(width)
+    ]
+
+    paired_row_words = 2 * width
+    complete_paired_rows = len(words) // paired_row_words
+    paired = [[] for _ in range(width)]
+    for row in range(complete_paired_rows):
+        base = row * paired_row_words
+        for lane in range(width):
+            paired[lane].extend(words[base + 2 * lane : base + 2 * lane + 2])
+
+    return {
+        "physical_width_candidate": width,
+        "dummy_lane_candidate": width if width > logical_count else None,
+        "word_interleaved": {
+            "complete_rows": complete_word_rows,
+            "tail_words": len(words) % width,
+            "lanes": [lane_statistics(lane) for lane in word_interleaved],
+        },
+        "paired_observations_per_channel": {
+            "complete_rows": complete_paired_rows,
+            "tail_words": len(words) % paired_row_words,
+            "lanes": [lane_statistics(lane) for lane in paired],
+        },
+    }
+
+
+def run_profile(profile_name: str, args, stamp: str, channels: tuple[int, ...]) -> dict:
     profile = OFFICIAL_SCAN_PROFILES[profile_name]
+    logical_count = len(channels)
+    aa = mask_for_channels(channels)
     cfg = DirectADCConfig(
         channel=1,
         a3=profile["a3"],
@@ -85,12 +167,18 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         timeout_ms=args.usb_timeout_ms,
     )
 
-    logger = args.output_dir / f"{stamp}_official-scan-a3-{profile_name}_transactions.jsonl"
+    channel_tag = "-".join(str(channel) for channel in channels)
+    stem = f"{stamp}_official-scan-channels-{channel_tag}-a3-{profile_name}"
+    logger = args.output_dir / f"{stem}_transactions.jsonl"
     with Hantek1008C(logger_path=logger) as scope:
         session = DirectADCSession(scope, cfg)
         calibration = session.initialize()
 
         setup = [
+            tx(scope, b"\xF3", args.usb_timeout_ms),
+            tx(scope, bytes([0xA0, logical_count]), args.usb_timeout_ms),
+            tx(scope, bytes([0xAA, *aa]), args.usb_timeout_ms),
+            tx(scope, bytes([0xA2] + [args.range_id] * 8), args.usb_timeout_ms),
             tx(scope, bytes([0xA3, profile["a3"]]), args.usb_timeout_ms),
             tx(scope, profile["ac"], args.usb_timeout_ms),
             tx(scope, b"\xF3", args.usb_timeout_ms),
@@ -211,12 +299,12 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         connection_id = scope.connection_id
 
     raw_bytes = bytes(raw)
-    raw_path = args.output_dir / f"{stamp}_official-scan-a3-{profile_name}.bin"
+    raw_path = args.output_dir / f"{stem}.bin"
     raw_path.write_bytes(raw_bytes)
     oversize_bytes = bytes(oversize_raw)
     oversize_path = None
     if oversize_bytes:
-        oversize_path = args.output_dir / f"{stamp}_official-scan-a3-{profile_name}_oversize-ca.bin"
+        oversize_path = args.output_dir / f"{stem}_oversize-ca.bin"
         oversize_path.write_bytes(oversize_bytes)
     words = le_u12_words(raw_bytes)
     candidate_rows = framed_candidate_rows
@@ -228,12 +316,12 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         raise HantekUSBError("stateful Scan row framer disagrees with whole-buffer framing")
     candidate_word0 = [row[0] for row in candidate_rows]
     candidate_word1 = [row[1] for row in candidate_rows]
-    # C9/CA Scan evidence now supports two temporally ordered CH1 observations
-    # per complete 4-byte row.  Preserve the row-oriented fields below for
-    # protocol diagnostics while exposing the evidence-backed flattened CH1
-    # stream separately.  This interpretation is specific to C9/CA Scan and is
-    # not shared with the distinct C7/C8 ROLL transport.
-    ch1_observations = scan_ch1_observations(candidate_rows)
+    # The two-observations-per-row interpretation is proven only for one
+    # enabled channel.  Multi-channel runs retain the same neutral 4-byte view
+    # for comparison but must not label it as CH1 data.
+    ch1_observations = (
+        scan_ch1_observations(candidate_rows) if logical_count == 1 else []
+    )
     candidate_4byte_rows = len(candidate_rows)
     candidate_4byte_tail_bytes = len(row_framer.carry)
     scan_elapsed_s = (scan_ended_ns - scan_started_ns) / 1_000_000_000.0
@@ -250,6 +338,10 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
 
     return {
         "profile": profile_name,
+        "logical_channels": list(channels),
+        "logical_channel_count": logical_count,
+        "a0": logical_count,
+        "aa": list(aa),
         "a3_hex": f"{profile['a3']:02X}",
         "official_time_div": profile["time_div"],
         "official_ac_hex": profile["ac"].hex(" ").upper(),
@@ -284,10 +376,12 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         "candidate_row_framer_total_input_bytes": row_framer.total_input_bytes,
         "candidate_row_framer_total_rows": row_framer.total_rows,
         "candidate_4byte_row_throughput_per_s": (candidate_4byte_rows / scan_elapsed_s) if scan_elapsed_s else None,
-        "decoded_ch1_observation_count": len(ch1_observations),
+        "decoded_ch1_observation_count": (
+            len(ch1_observations) if logical_count == 1 else None
+        ),
         "decoded_ch1_observation_throughput_per_s": (
             scan_observation_rate(candidate_4byte_rows / scan_elapsed_s)
-            if scan_elapsed_s else None
+            if scan_elapsed_s and logical_count == 1 else None
         ),
         "decoded_ch1_min": min(ch1_observations) if ch1_observations else None,
         "decoded_ch1_max": max(ch1_observations) if ch1_observations else None,
@@ -310,6 +404,7 @@ def run_profile(profile_name: str, args, stamp: str) -> dict:
         "observational_u12_min": min(words) if words else None,
         "observational_u12_max": max(words) if words else None,
         "observational_u12_span": (max(words) - min(words)) if words else None,
+        "multichannel_candidate_views": multichannel_candidate_views(words, logical_count),
         "initialization_calibration": calibration,
         "transaction_log": str(logger),
     }
@@ -341,11 +436,26 @@ def main() -> int:
         ),
     )
     ap.add_argument("--range", dest="range_id", type=lambda s: int(s, 16), default=0x03)
+    ap.add_argument(
+        "--channel-counts", type=parse_channel_counts, default=(1,),
+        metavar="LIST",
+        help="contiguous enabled-channel counts, e.g. 8,7,6 or all-desc (default: 1)",
+    )
+    ap.add_argument(
+        "--channel-sets", type=parse_channel_sets,
+        metavar="SETS",
+        help=(
+            "explicit semicolon-separated channel masks, e.g. "
+            "'1,8;2,5;1,2,5,8'; overrides --channel-counts"
+        ),
+    )
     ap.add_argument("--pre-c2-ms", type=float, default=1870.0)
     ap.add_argument("--pre-c2-poll-ms", type=float, default=10.0)
     ap.add_argument("--capture-s", type=float, default=2.0)
     ap.add_argument("--poll-ms", type=float, default=5.0)
     ap.add_argument("--usb-timeout-ms", type=int, default=1000)
+    ap.add_argument("--retry-timeout-s", type=float, default=15.0)
+    ap.add_argument("--retry-interval-s", type=float, default=0.5)
     ap.add_argument("--output-dir", type=Path, default=Path("captures"))
     args = ap.parse_args()
 
@@ -353,6 +463,8 @@ def main() -> int:
         ap.error("--range must be 01, 02, or 03")
     if min(args.pre_c2_ms, args.pre_c2_poll_ms, args.poll_ms) < 0 or args.capture_s <= 0:
         ap.error("timing values must be non-negative and --capture-s must be > 0")
+    if args.retry_timeout_s < 0 or args.retry_interval_s <= 0:
+        ap.error("--retry-timeout-s must be >= 0 and --retry-interval-s must be > 0")
 
     profiles = select_profiles(args.profile)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -363,31 +475,85 @@ def main() -> int:
     print("Linux evidence: steady C9<=64 is a valid CA prefix length; C9>64 is quarantined.\n")
 
     results = []
-    for profile in profiles:
-        print(f"=== official Scan Mode A3={profile.upper()} ({OFFICIAL_SCAN_PROFILES[profile]['time_div']}) ===")
-        try:
-            row = run_profile(profile, args, stamp)
-            print(
-                f"  C9 polls={row['scan_poll_count']} CA packets={row['ca_packet_count']} "
-                f"steady_bytes={row['raw_bytes']} u12_words={row['observational_le_u12_words']} "
-                f"candidate_4B_rows={row['candidate_4byte_rows']} "
-                f"candidate_rows/s={row['candidate_4byte_row_throughput_per_s']:.3f} "
-                f"ch1_obs={row['decoded_ch1_observation_count']} "
-                f"ch1_obs/s={row['decoded_ch1_observation_throughput_per_s']:.3f} "
-                f"tail={row['candidate_4byte_tail_bytes']}B oversize_ca={row['oversize_ca_packet_count']}"
-            )
-        except Exception as exc:
-            row = {
-                "profile": profile,
-                "status": "error",
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-            print(f"  ERROR: {row['error']}")
+    channel_sets = args.channel_sets or tuple(
+        tuple(range(1, logical_count + 1))
+        for logical_count in args.channel_counts
+    )
+    experiments = [
+        (channels, profile)
+        for channels in channel_sets
+        for profile in profiles
+    ]
+    for index, (channels, profile) in enumerate(experiments, 1):
+        logical_count = len(channels)
+        channel_names = ",".join(f"CH{channel}" for channel in channels)
+        print("=" * 72)
+        print(f"Scan experiment {index}/{len(experiments)}")
+        print(f"  - Enabled channels: {channel_names}")
+        print(f"  - Candidate physical width: {observed_windows_width(logical_count)}")
+        print(f"  - A3={profile.upper()} ({OFFICIAL_SCAN_PROFILES[profile]['time_div']})\n")
+        started = time.monotonic()
+        deadline = started + args.retry_timeout_s
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                row = run_profile(profile, args, stamp, channels)
+                if attempt > 1:
+                    print("[USB recovery]")
+                    print("  - Recovery: SUCCESS")
+                    print(f"  - Ready after: {time.monotonic() - started:.1f} seconds")
+                    print(f"  - Full experiment attempts: {attempt}\n")
+                break
+            except HantekUSBError as exc:
+                elapsed = time.monotonic() - started
+                if attempt == 1:
+                    print("[USB recovery]")
+                    print(f"  - Initial experiment failed: {exc}")
+                    print(f"  - Retry window: {args.retry_timeout_s:.1f} seconds")
+                    print(f"  - Retry interval: {args.retry_interval_s:.1f} seconds")
+                else:
+                    print(f"  - Retry {attempt - 1} at +{elapsed:.1f}s: {exc}")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    row = {
+                        "profile": profile,
+                        "logical_channel_count": logical_count,
+                        "status": "error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                    print("  - Recovery: FAILED\n")
+                    break
+                time.sleep(min(args.retry_interval_s, remaining))
+            except Exception as exc:
+                row = {
+                    "profile": profile,
+                    "logical_channel_count": logical_count,
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                print(f"  ERROR: {row['error']}")
+                break
+        if row.get("status") != "error":
+            print("Capture result")
+            print(f"  - C9 polls: {row['scan_poll_count']}")
+            print(f"  - CA packets: {row['ca_packet_count']}")
+            print(f"  - Steady bytes: {row['raw_bytes']}")
+            print(f"  - Observed words: {row['observational_le_u12_words']}")
+            print(f"  - Word throughput: {row['observational_word_throughput_per_s']:.3f} words/s")
+            print(f"  - Quarantined startup CA packets: {row['oversize_ca_packet_count']}")
+            if logical_count == 1:
+                print(f"  - Proven CH1 observations: {row['decoded_ch1_observation_count']}")
+                print(f"  - Proven CH1 rate: {row['decoded_ch1_observation_throughput_per_s']:.3f} Sa/s")
+            views = row["multichannel_candidate_views"]
+            print("\nCandidate layout tails")
+            print(f"  - Word-interleaved: {views['word_interleaved']['tail_words']} word(s)")
+            print(f"  - Paired observations/channel: {views['paired_observations_per_channel']['tail_words']} word(s)\n")
         results.append(row)
 
     out = args.output_dir / f"{stamp}_official-scan.json"
     out.write_text(json.dumps({
-        "format": "hantek1008c-official-scan-probe-v6",
+        "format": "hantek1008c-official-scan-probe-v7",
         "timestamp_utc": stamp,
         "canonical_acquisition_modified": False,
         "source_evidence": "official Windows USBPcap 2026-08-29",

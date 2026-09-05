@@ -221,3 +221,63 @@ result against whole-buffer framing as an invariant.
 This is framing only.  It does not establish whether one logical oscilloscope
 sample is a whole 4-byte pair or either individual 16-bit observation, and it
 does not modify `DirectADCSession` or the existing C7/C8 ROLL lab path.
+
+## Multi-channel geometry probe
+
+The probe can now command contiguous channel counts while retaining the raw
+C9/CA stream.  Multi-channel Scan layout is not yet established, so these runs
+report two competing structural views without selecting either one:
+
+- words interleaved across the candidate physical width;
+- two adjacent observations grouped for each candidate physical channel.
+
+The candidate width uses the direct-ADC `1,2,4,4,6,6,8,8` table only as a
+hypothesis.  Odd channel counts therefore expose the possible final dummy lane
+instead of silently discarding it.  Only a one-channel run is labelled as a
+decoded CH1 stream.
+
+Run the first geometry matrix from eight channels backwards at the fastest
+Scan profile with:
+
+```bash
+python tools/probe_official_scan.py \
+    --profile 1a \
+    --channel-counts all-desc \
+    --capture-s 2 \
+    --output-dir captures/scan-multichannel-a3-1a
+```
+
+Each experiment uses a fresh full initialization.  A temporary USB
+re-enumeration retries the complete experiment for up to 15 seconds, with each
+failure and the eventual recovery recorded clearly on the terminal.  This is
+diagnostic-only and does not enable multi-channel Scan in the canonical Python
+acquisition path or libsigrok.
+
+Sparse masks can be collected in the same batch using semicolon-separated
+channel sets. For example:
+
+```bash
+python tools/probe_official_scan.py \
+    --profile 1a \
+    --channel-sets '1,8;2,5;1,2,5,8' \
+    --capture-s 2 \
+    --output-dir captures/scan-multichannel-sparse-a3-1a
+```
+
+### Multi-channel results (2026-09-05)
+
+The contiguous eight-to-one matrix produced approximately 780--795 aggregate
+ADC words/s at A3=1A for every enabled count. Even counts separated the known
+CH1 sine, grounded CH2/CH5, and CH8 square-wave references cleanly. Odd counts
+divided exactly by 7, 5, and 3; applying Triggered's padded widths instead mixed
+the channel baselines and left incomplete rows.
+
+The sparse matrix then exercised `CH1+CH8`, `CH2+CH5`, `CH1+CH5`, `CH5+CH8`,
+`CH1+CH5+CH8`, and `CH1+CH2+CH5+CH8`. Every raw word count divided exactly by
+the enabled count, including the odd sparse three-channel case. Deinterleaving
+by enabled count placed each driven or grounded reference in its expected
+physical channel, in ascending enabled-channel order.
+
+This establishes the production Scan structure as a continuous stream of
+little-endian 12-bit ADC words interleaved over the exact enabled-channel mask.
+It is deliberately separate from Triggered's odd-count dummy-slot geometry.
