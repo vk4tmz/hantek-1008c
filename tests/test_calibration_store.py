@@ -12,6 +12,69 @@ from hantek1008c.calibration import (
 )
 
 
+LIBSIGROK_GENERATED_CALIBRATION = """\
+[format]
+version = 1
+
+[device usb/1-1.1 channel CH1 range 01]
+usb_vid = 0783
+usb_pid = 5725
+connection_id = usb/1-1.1
+channel = CH1
+range_a2 = 01
+zero_adc = 1939.083666667
+zero_stddev = 0.822901304
+zero_min = 1936
+zero_max = 1942
+samples = 12000
+volts_per_count = 0.0002
+calibrated_utc = 2026-09-05T08:32:36+00:00
+scale_source = reference_nominal_mfg92
+
+[device usb/1-1.1 channel CH1 range 02]
+usb_vid = 0783
+usb_pid = 5725
+connection_id = usb/1-1.1
+channel = CH1
+range_a2 = 02
+zero_adc = 1950.031750000
+zero_stddev = 0.739081821
+zero_min = 1947
+zero_max = 1953
+samples = 12000
+volts_per_count = 0.00125
+calibrated_utc = 2026-09-05T08:32:44+00:00
+scale_source = reference_nominal_mfg92
+validation_source = onboard_1khz_2vpp
+validation_measured_vpp = 2.067500000
+validation_measured_frequency_hz = 1000.000000000
+validation_passed = true
+validation_samples = 12000
+validated_utc = 2026-09-05T08:33:08+00:00
+
+[device usb/1-1.1 channel CH1 range 03]
+usb_vid = 0783
+usb_pid = 5725
+connection_id = usb/1-1.1
+channel = CH1
+range_a2 = 03
+zero_adc = 1969.439500000
+zero_stddev = 0.675282472
+zero_min = 1965
+zero_max = 1973
+samples = 12000
+volts_per_count = 0.01
+calibrated_utc = 2026-09-05T08:32:52+00:00
+validation_source = onboard_1khz_2vpp
+validation_measured_vpp = 1.970000000
+validation_measured_frequency_hz = 1000.000000000
+validation_passed = true
+validation_samples = 12000
+validated_utc = 2026-09-05T08:33:11+00:00
+scale_source = reference_nominal_mfg92
+"""
+
+
 def test_section_is_device_channel_range_specific():
     assert section_name("usb/1-2.3", 1, 3) == "device usb/1-2.3 channel CH1 range 03"
 
@@ -26,6 +89,31 @@ def test_zero_calibration_round_trip(tmp_path: Path):
     assert loaded.volts_per_count == pytest.approx(0.01)
     assert loaded.volts(2201) == pytest.approx(2.0)
     assert load_zero_calibration("usb/1-2.3", 2, 3, path) is None
+
+
+def test_loads_libsigrok_generated_calibration_store(tmp_path: Path):
+    """Keep the Python/libsigrok calibration-file contract compatible."""
+    path = tmp_path / "calibration.ini"
+    path.write_text(LIBSIGROK_GENERATED_CALIBRATION, encoding="utf-8")
+
+    expected = {
+        1: (1939.083666667, 0.822901304, 1936, 1942, 0.0002),
+        2: (1950.031750000, 0.739081821, 1947, 1953, 0.00125),
+        3: (1969.439500000, 0.675282472, 1965, 1973, 0.01),
+    }
+    for range_id, values in expected.items():
+        cal = load_zero_calibration("usb/1-1.1", 1, range_id, path)
+        assert cal is not None
+        assert cal.zero_adc == pytest.approx(values[0])
+        assert cal.zero_stddev == pytest.approx(values[1])
+        assert cal.zero_min == values[2]
+        assert cal.zero_max == values[3]
+        assert cal.samples == 12000
+        assert cal.volts_per_count == pytest.approx(values[4])
+        assert cal.scale_source == "reference_nominal_mfg92"
+
+    assert load_zero_calibration("usb/1-1.1", 2, 3, path) is None
+    assert load_zero_calibration("usb/9-9", 1, 3, path) is None
 
 
 def test_reference_validation_does_not_modify_zero(tmp_path: Path):
