@@ -67,3 +67,16 @@ initial `B0` timeout after re-enumeration, to a successful fresh initialization
 after 5.9 seconds and six attempts. The subsequent CH6 A2=03 zero capture and
 reference validation passed, providing evidence that the recovered session was
 sound. Individual acquisition commands are not blindly retried mid-sequence.
+
+The production `sigrok-hantek-1008c-calibrate` utility writes the same format-1
+section and field schema as the Python calibration module. A regression test in
+`tests/test_calibration_store.py` loads representative Narrow, Medium, and Wide
+records emitted by that utility, including its reference-validation metadata.
+This keeps the cross-project calibration contract explicit.
+
+After the final input-range/startup integration changed the observed grounded
+baseline, all 24 channel/range zero entries were regenerated with the production
+utility. Medium and Wide reference validation passed on all eight channels. This
+also demonstrated why calibration should be repeated after a driver change that
+affects analogue frontend initialization rather than carrying forward stale
+zero values merely because the file format is still compatible.

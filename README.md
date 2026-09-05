@@ -20,14 +20,17 @@ IN  0x81: F3
 
 ## Native libsigrok / PulseView status
 
-Triggered acquisition is hardware-validated in PulseView for every contiguous
-enabled-channel count from one through eight. The production driver exposes the
-two validated aggregate-rate families, applies independent persisted A2=03
-calibration per physical channel, and omits the unused final transport lane at
-odd channel counts 3, 5, and 7.
+Triggered, Scan, and Roll acquisition are hardware-validated in PulseView for
+every enabled-channel count from one through eight, including sparse channel
+masks. The production driver exposes mode- and channel-dependent sample-rate
+lists, applies independent persisted calibration for all three ranges and every
+physical channel, removes Triggered dummy lanes at odd channel counts, and
+removes Roll's trailing auxiliary word.
 
-The full validation matrix and eight-channel screenshots are retained in
-[`docs/multichannel-samplerate-lab.md`](docs/multichannel-samplerate-lab.md).
+See the concise [libsigrok and PulseView user guide](docs/libsigrok-pulseview.md)
+for installation, calibration, operation, and limitations. Detailed protocol
+evidence remains in [`docs/multichannel-samplerate-lab.md`](docs/multichannel-samplerate-lab.md)
+and the other research notes under `docs/`.
 
 ## Setup
 

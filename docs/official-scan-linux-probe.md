@@ -3,6 +3,12 @@
 This note describes the diagnostic Linux reproduction of the official Hantek
 1008C Scan Mode observed in the 2026-08-29 Windows USBPcap evidence.
 
+> **Historical investigation note:** statements below that the multichannel
+> layout was unknown describe the state of this specific probe campaign. The
+> later 2026-09-05 contiguous and sparse hardware matrices established exact
+> enabled-count packing, and the production libsigrok driver now supports
+> multichannel Scan. See `libsigrok-pulseview.md` for current user-facing status.
+
 The proven boundary is 200 ms/div (`A3=19`, triggered C6/A6 family) to
 500 ms/div (`A3=1A`, official Scan Mode C9/CA family).  1 s/div uses `A3=1B`
 and remains in C9/CA Scan Mode.  `A4 01` remains in use on the Scan side.
