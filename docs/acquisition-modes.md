@@ -88,6 +88,21 @@ The 2.006 kSa/s, 1.003 kSa/s, 401 Sa/s and 201 Sa/s points have been checked on
 hardware with a 50 Hz sine. The observed progression was approximately 40, 20, 8 and
 4 samples/cycle respectively.
 
+`tools/probe_multichannel_roll.py` is the diagnostic geometry probe for testing
+whether C7/C8 ROLL can carry multiple enabled channels. It runs contiguous
+eight-to-one and sparse masks in one invocation, retains raw transport bytes,
+and reports all-word interleave, historical word0-only interleave, paired-word,
+and Triggered-padded-width candidate views. None is selected as canonical until
+the known physical input signals identify the layout.
+
+The 2026-09-05 A3=18 matrix established the row layout as all enabled channels
+in ascending physical order followed by one auxiliary word. Contiguous counts
+from eight through one and sparse masks `1+8`, `2+5`, `1+5`, `5+8`, `1+5+8`,
+and `1+2+5+8` retained the expected sine, grounded baselines, and square-wave
+identities. The transport produced approximately 3974 words/s independent of
+enabled count. Thus Roll's per-channel rate is the aggregate word rate divided
+by `enabled_count + 1`; the auxiliary word is not an analogue channel.
+
 ## Comfortable waveform-frequency table
 
 ### TRIGGERED
