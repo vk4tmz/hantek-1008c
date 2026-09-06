@@ -6,8 +6,25 @@ build-backend = "setuptools.build_meta"
 name = "hantek-1008c"
 version = "0.1.0"
 description = "Linux USB protocol research and tooling for the Hantek 1008C oscilloscope"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Mark Rutherford" },
+]
 requires-python = ">=3.10"
 dependencies = ["pyusb>=1.3.1"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+
+[project.urls]
+Homepage = "https://github.com/vk4tmz/hantek-1008c"
+Repository = "https://github.com/vk4tmz/hantek-1008c.git"
+Issues = "https://github.com/vk4tmz/hantek-1008c/issues"
 
 [tool.setuptools.packages.find]
 include = ["hantek1008c*"]
