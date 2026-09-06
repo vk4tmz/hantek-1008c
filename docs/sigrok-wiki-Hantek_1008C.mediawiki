@@ -1,0 +1,241 @@
+<!--
+Proposed update to https://sigrok.org/wiki/Hantek_1008C
+Based on wiki revision 15112. The inherited and new wiki content is provided
+under the sigrok wiki's CC BY-SA 3.0 terms.
+-->
+{{Infobox oscilloscope
+| image            = [[File:Hantek_1008C.png|180px]]
+| name             = Hantek 1008C
+| status           = supported
+| source_code_dir  = hantek-1008c
+| channels         = 8
+| samplerate       = 2.4MS/s aggregate (see notes)
+| samplerate_state = supported
+| triggers         = rising/falling edge on any analog channel
+| voltages         = ±500mV / ±20V
+| memory           = 4K samples, 12 bits each
+| compression      = none
+| website          = [http://www.hantek.com.cn/en/ProductDetail_13_13170.html hantek.com]
+}}
+
+The '''Hantek 1008C''' is a USB-based, 8-channel oscilloscope with 12-bit sampling resolution. The hardware also includes an 8-channel digital pattern generator, which is not currently supported by the sigrok driver.
+
+See [[Hantek 1008C/Info]] for some more details (such as '''lsusb -vvv''' output) on the device.
+
+== Driver support ==
+
+The device is supported by the {{LSR}} <code>hantek-1008c</code> driver. It supports:
+
+* All eight analog input channels, including sparse channel selections.
+* Trigger, Scan, and Roll acquisition modes.
+* Channel-count-dependent sample-rate lists.
+* Rising and falling edge triggers on any enabled analog channel.
+* Trigger levels expressed in volts and converted using the selected input range and channel calibration.
+* Narrow, Medium, and Wide input ranges.
+* Optional per-channel and per-range voltage calibration.
+* Automatic recovery from the temporary USB disconnects and readiness failures observed during acquisition setup.
+
+The digital pattern-generator outputs are not supported.
+
+=== Acquisition modes ===
+
+; Trigger
+: Captures frames from the device's acquisition memory. Hardware triggering is available on any enabled channel, with rising or falling slope and a trigger level expressed in volts. With no trigger source selected, acquisition runs in automatic/free-running mode and forces completion after the trigger wait expires.
+
+; Scan
+: Uses the device's official low-rate scan protocol. Samples from all enabled channels are interleaved continuously. Available per-channel rates depend on the number of enabled channels.
+
+; Roll
+: Uses the device's rolling acquisition protocol. It provides more low-rate samples than Scan mode, at the cost of one auxiliary word in each interleaved row. Available per-channel rates depend on the number of enabled channels.
+
+The driver reports the effective '''per-channel''' sample rate. The maximum aggregate Trigger rate is 2.4MS/s. Trigger uses physical acquisition widths of 1, 2, 4, 4, 6, 6, 8, and 8 lanes for one through eight enabled channels respectively. Scan divides its aggregate rate by the exact enabled-channel count. Roll divides its aggregate rate by the enabled-channel count plus one.
+
+=== Input ranges ===
+
+The driver presents the hardware A2 settings using user-facing names:
+
+{| class="wikitable"
+! Name
+! Hardware value
+! Nominal scale
+|-
+| Narrow
+| <code>A2=01</code>
+| 0.0002V/count
+|-
+| Medium
+| <code>A2=02</code>
+| 0.00125V/count
+|-
+| Wide
+| <code>A2=03</code>
+| 0.01V/count
+|}
+
+These are hardware input-range selections, not volts-per-division settings. The displayed volts-per-division scale is controlled separately by the frontend.
+
+=== Calibration ===
+
+The driver can apply optional zero-offset and voltage-scale calibration independently for every channel and input range. Install libsigrok, close PulseView and any other program using the oscilloscope, then run:
+
+  sigrok-hantek-1008c-calibrate
+
+The utility groups the three grounded captures and then the supported onboard-reference checks for each channel, minimizing probe moves. Follow its connection prompts carefully. During a grounded capture, disconnect or ground every other input. Do not leave the onboard reference output connected to another channel.
+
+Calibration data is stored at:
+
+  $XDG_DATA_HOME/hantek-1008c/calibration.ini
+
+If <code>XDG_DATA_HOME</code> is not set, the default is:
+
+  ~/.local/share/hantek-1008c/calibration.ini
+
+Calibration entries are currently keyed by USB connection path. Moving the oscilloscope to another USB port may require recalibration or moving the applicable entries to sections for the new connection path.
+
+The utility rejects noisy grounded captures and unusually large changes from an existing zero calibration. The maximum permitted change is recorded as a device policy in the calibration file and can be deliberately changed with the utility's <code>--max-zero-calibration-range</code> option.
+
+=== PulseView ===
+
+Recent PulseView versions expose Device mode, Input range, sample rate, trigger source, trigger slope, and trigger level in the device configuration. Changing the device mode or enabled-channel set refreshes the available sample-rate list.
+
+<gallery widths="360" heights="230">
+File:Hantek_1008C_PulseView_8ch_100ksps.png|Eight enabled channels in PulseView at 100kS/s per channel
+File:Hantek_1008C_PulseView_8ch_300ksps.png|Eight enabled channels in PulseView at 300kS/s per channel
+</gallery>
+
+== Hardware ==
+
+* '''CPU''': ST Microelectronics STM32F103C6T6A
+* '''Low-dropout voltage regulator''': Advanced Monolithic Systems AMS1117-3.3
+* '''8-channel analog multiplexer/demultiplexer:''' NXP Semiconductor 74HCT4051D (1 per analog channel)
+* '''Octal 3-state buffer:''' Fairchild Semiconductor MM74HC244SJ (in the path of digital outputs)
+* '''8-bit shift register with 3-state output:''' 74HC595 (3 total)
+* '''Dual opamp:''' in MSOP-8 package, Texas Instruments unknown model (chip markings "TI 25 AVG") (1 per analog channel)
+
+1M impedance, DC coupling
+
+ships with one high pressure ignition probe (inductive)
+
+more recent board revision ("Mini DSO V1.00.14 // 2018-11")
+* STM32F103C8T6
+* AMS1117-3.3 LDO plus (not identified) SMPS U427, no barrel jack, only USB-B
+* 8x NXP 74HC4051D, 8x TI 86 AVG (per analog channel)
+* 1x TI HC244 (for digital outputs)
+* 1x TI 86 AVG (near IDC pin header, A0/A1 signals)
+* 3x HC595
+
+== Photos ==
+
+=== V1.00.4 2012-03 ===
+
+<gallery>
+File:Hantek_1008C.png|<small>Device, top</small>
+File:Hantek_1008C_bottom.jpg|<small>Device, bottom</small>
+File:Hantek_1008C_package_contents.jpg|<small>Package contents</small>
+File:Hantek_1008C_front.jpg|<small>Device, front</small>
+File:Hantek_1008C_back.jpg|<small>Device, back</small>
+File:Hantek_1008C_front_input.jpg|<small>Front inputs</small>
+File:Hantek_1008C_void_if_removed.jpg|<small>Void if removed sticker</small>
+File:Hantek_1008C_top_cover.jpg|<small>Top cover</small>
+File:Hantek_1008C_pcb_mounted.jpg|<small>Top cover removed</small>
+File:Hantek_1008C_pcb_top.jpg|<small>PCB, top</small>
+File:Hantek_1008C_pcb_bottom.jpg|<small>PCB, bottom</small>
+File:Hantek_1008C_v_1_00_4.jpg|<small>PCB revision, v1.00.4</small>
+File:Hantek_1008C_stm32f1.jpg|<small>Main CPU, STM32F1</small>
+File:Hantek_1008C_IC_74hc4051d.jpg|<small>74HC4051D</small>
+File:Hantek_1008C_IC_ams1117.jpg|<small>AMS1117 3.3V LDO</small>
+File:Hantek_1008C_IC_hc244sj.jpg|<small>HC224SJ</small>
+File:Hantek_1008C_IC_hc595.jpg|<small>HC595</small>
+File:Hantek_1008C_IC_ti25avg.jpg|<small>TI25AVG</small>
+File:Hantek_1008C_input_frontend.jpg|<small>Analog input circuit</small>
+</gallery>
+
+=== V1.00.12 2018-11 ===
+
+There is another version ("Mini DSO V1.00.12 // 2018-11") which differs from the images above: Comes in a pouch, ships with eight BNC to alligator cables, lacks a barrel jack, LED position has moved, rubber bumpers around case edges, no silkscreen labels on the case, signal names "engraved", teardown yet to be done. See the (updated) vendor's product page to get an idea.
+
+<gallery>
+File:Hantek-1008c-pcb-top.png|<small>PCB top</small>
+File:Hantek-1008c-pcb-ch123.png|<small>PCB top, channels 1-3</small>
+File:Hantek-1008c-pcb-ch3456.png|<small>PCB top, channels 3-6</small>
+File:Hantek-1008c-pcb-ch78.png|<small>PCB top, channels 7-8</small>
+File:Hantek-1008c-pcb-reg-mcu-gen.png|<small>PCB top, regulation, MCU, generator, pin expander</small>
+File:Hantek-1008c-pcb-bottom.png|<small>PCB bottom</small>
+File:Hantek-1008c-case-blinds-1.png|<small>case walls, connector labels</small>
+File:Hantek-1008c-case-blinds-2.png|<small>case walls, generator pinout</small>
+</gallery>
+
+== Protocol ==
+
+Need to continuously send commands to the OUT Endpoint, and for each command receive the result from the IN Endpoint (both Endpoints can transfer max 64 bytes).
+The device got logically disconnected automatically if not receive any command after 7 seconds.
+
+=== List of commands (incomplete) ===
+* A0 -> set number of channel enabled (ie. A0 02: 2 channels are enabled)
+* AA -> set which channel to enable (ie. AA 01 01 00 00 00 00 00 00 enable channel 1 and 2)
+* A2 -> set voltage level for each channel (ie. A2 03 03 03 03 03 03 03 03 apply +-20V range on each channel)
+* A3 -> set sampling rate (ie. A3 00 set highest sampling rate)
+* AC -> set sampling rate (ie. AC 07 D0 00 03 42 00 03 42 set highest sampling rate for 2 channels enabled = 1.2MS/s)
+* AB -> set trigger level (ie. AB 08 00)
+* C1 -> set trigger source and slope (ie. C1 00 00 for Channel 1, rising slope, C1 01 01 for Channel 2, falling slope)
+* F3 -> hardware ping (required to send regularly also when acquisition is stoped, otherwise the hardware disconnect)
+
+=== Sample of initialization cycle ===
+* B0
+* F3
+* B901BF040000
+* B700
+* BB0800
+* B5
+* B6
+* E5
+* F7
+* F8
+* FA
+* F5
+* A008
+* AA0101010101010101
+* A311
+* C10000
+* A70000
+* AC01F40009C50009C5
+
+=== Start of waiting cycle for data to be ready into the buffers ===
+* F3
+* A2 01 01 01 01 01 01 01 01
+* A4 01
+* C0
+* C2
+* A5 5A
+* A5 5A
+
+=== Buffers Reading Cycle ===
+* C6 02 (return Buffer 1 size)
+* A6 02 (acquire 64 bytes, 32 samples of 12 bits each, repeated 60 times get 2000 samples)
+* C6 03 (return Buffer 2 size)
+* A6 03 (acquire 64 bytes, 32 samples of 12 bits each, repeated 60 times get 2000 samples)
+
+== Notes ==
+
+* The maximum measured aggregate sample rate is 2.4MS/s. The effective rate per channel depends on the acquisition mode and enabled-channel count.
+* Triggered acquisition reads two device buffers containing 2000 12-bit samples each. The driver preserves complete hardware frames when applying sample limits.
+* Earlier investigation found substantial non-linearity in the lower hardware input ranges. Calibration improves zero placement and voltage conversion but does not establish laboratory-grade linearity or accuracy.
+* ADC zero is device-state dependent. Temperature-dependent movement after power-on was previously reported. A common raw ADC-zero displacement has also been observed on the development unit after calibration while it remained continuously powered. The cause, and whether it affects other units, remain under investigation. Recheck the grounded zero before measurements where absolute DC accuracy is important.
+
+== Resources ==
+
+* [http://www.hantek.com.cn/en/ProductDetail_13_13170.html vendor's product page]
+* [http://www.hantek.com/Product/Hantek1008/Hantek1008_Manual.pdf Manual]
+* [http://www.hantek.com.cn/Product/Hantek1008/Hantek1008_V1.0.8.zip Vendor software]
+
+* [https://forums.ni.com/t5/LabVIEW/Hantek-1008C-data-type/td-p/3240415 Decode .DRC data format]
+* [https://github.com/giwig/hantek1008C giwig hantek1008C] and [https://github.com/mfg92/hantek1008py mfg hantek1008py] github repositories, Apache licensed Python code (somehow related to or derived from each other?)
+* [https://github.com/vk4tmz/hantek-1008c Hantek 1008C protocol laboratory and development documentation]
+
+* [https://www.youtube.com/watch?v=OaPVTmd5ins A DIY solution to providing hardware based AC COUPLING to HANTEK 1008]
+* [https://www.youtube.com/watch?v=BjPUbO-U-VA Make a DIY AC Coupling Adapter for Hantek 1008C]
+* [https://www.youtube.com/watch?v=gCd4bbuFPNA&t=79s Make an external DIY AC Coupler]
+
+[[Category:Device]]
+[[Category:Oscilloscope]]
+[[Category:Supported]]

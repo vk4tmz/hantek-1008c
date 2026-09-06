@@ -33,6 +33,9 @@ evidence remains in [`docs/multichannel-samplerate-lab.md`](docs/multichannel-sa
 and the other research notes under `docs/`. The complete chronological
 [libsigrok driver development history](docs/libsigrok-driver-development-history.md)
 is retained here rather than in the upstream driver source tree.
+The proposed update to sigrok's existing
+[Hantek 1008C wiki page](docs/sigrok-wiki-Hantek_1008C.mediawiki) is retained
+as MediaWiki source until it can be applied upstream.
 
 ## Setup
 
