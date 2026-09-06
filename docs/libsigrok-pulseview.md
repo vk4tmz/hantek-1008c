@@ -4,6 +4,18 @@ This is the concise user guide for the native Linux Hantek 1008C driver. The
 companion documents in this repository preserve the protocol evidence and
 experiments behind the implementation.
 
+## Upstream status
+
+The native driver and corresponding PulseView integration have been submitted
+upstream for review:
+
+- [libsigrok PR #301: Hantek 1008C oscilloscope support](https://github.com/sigrokproject/libsigrok/pull/301)
+- [PulseView PR #132: device mode, input range and trigger-level integration](https://github.com/sigrokproject/pulseview/pull/132)
+
+Until these changes are merged, use the branches from the associated forks and
+build both projects against the same development installation prefix as shown
+below.
+
 ## Supported operation
 
 The driver supports all eight analogue inputs in three distinct acquisition

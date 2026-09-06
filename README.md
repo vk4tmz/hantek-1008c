@@ -22,10 +22,22 @@ IN  0x81: F3
 
 Triggered, Scan, and Roll acquisition are hardware-validated in PulseView for
 every enabled-channel count from one through eight, including sparse channel
-masks. The production driver exposes mode- and channel-dependent sample-rate
-lists, applies independent persisted calibration for all three ranges and every
-physical channel, removes Triggered dummy lanes at odd channel counts, and
-removes Roll's trailing auxiliary word.
+masks. The production driver exposes sample-rate lists that depend on the
+acquisition mode and enabled-channel count, applies independent persisted
+calibration for all three ranges and every physical channel, removes Triggered
+dummy lanes at odd channel counts, and removes Roll's trailing auxiliary word.
+
+### Upstream submissions
+
+The native driver and corresponding PulseView integration have been submitted
+upstream for review:
+
+- [libsigrok PR #301: Hantek 1008C oscilloscope support](https://github.com/sigrokproject/libsigrok/pull/301)
+- [PulseView PR #132: device mode, input range and trigger-level integration](https://github.com/sigrokproject/pulseview/pull/132)
+
+Until these changes are merged, the required branches remain available from
+the associated forks and should be built together using the instructions in
+[`docs/libsigrok-pulseview.md`](docs/libsigrok-pulseview.md).
 
 See the concise [libsigrok and PulseView user guide](docs/libsigrok-pulseview.md)
 for installation, calibration, operation, and limitations. Detailed protocol
