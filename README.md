@@ -30,7 +30,9 @@ removes Roll's trailing auxiliary word.
 See the concise [libsigrok and PulseView user guide](docs/libsigrok-pulseview.md)
 for installation, calibration, operation, and limitations. Detailed protocol
 evidence remains in [`docs/multichannel-samplerate-lab.md`](docs/multichannel-samplerate-lab.md)
-and the other research notes under `docs/`.
+and the other research notes under `docs/`. The complete chronological
+[libsigrok driver development history](docs/libsigrok-driver-development-history.md)
+is retained here rather than in the upstream driver source tree.
 
 ## Setup
 
