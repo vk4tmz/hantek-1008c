@@ -109,3 +109,41 @@ utility. Medium and Wide reference validation passed on all eight channels. This
 also demonstrated why calibration should be repeated after a driver change that
 affects analogue frontend initialization rather than carrying forward stale
 zero values merely because the file format is still compatible.
+
+## Unresolved common-mode zero drift (2026-09-06)
+
+The development unit has shown a repeatable midday displacement of its raw ADC
+zero on consecutive days. The scope had remained powered continuously for days,
+so this must not be described as ordinary post-power-on warm-up. Warmer ambient
+conditions and changed room airflow are plausible correlations, but causation
+has not yet been established.
+
+With CH1 and CH2 grounded, all other inputs disconnected, no onboard reference
+connected, and saved calibration bypassed, three consecutive Triggered frames
+were internally stable while their means disagreed with the saved Wide zeros:
+
+| Channel | Saved Wide zero | Raw mean at 12:05 | Raw mean at 12:36 |
+|---|---:|---:|---:|
+| CH1 | 2004.929 | 1982.952 | 1977.676 |
+| CH2 | 2016.054 | 1988.368 | 1982.947 |
+
+Both channels moved downward by approximately 5.3--5.4 counts during the
+31-minute observation. A later single-probe CH1 sweep measured raw-minus-saved
+zero differences of -29.642, -29.350, and -29.122 counts for Narrow, Medium,
+and Wide respectively. Agreement within 0.52 count across all three ranges
+shows a common raw ADC displacement rather than incorrect range selection or
+voltage scaling. The resulting displayed error differs by range because each
+range has a different volts-per-count scale: approximately -5.93 mV Narrow,
+-36.69 mV Medium, and -291.22 mV Wide.
+
+One CH1 checkpoint contained a separate transient population (minimum 1721,
+standard deviation 14.196 counts) while neighbouring captures remained below
+one count standard deviation. The existing noise-quality check would correctly
+reject such a calibration capture.
+
+This observation remains an investigation item. Determine whether raw zero
+tracks ambient temperature or airflow, and whether the official application
+performs continuing zero compensation or sends an unidentified hardware
+auto-zero/frontend command. Do not weaken the zero-shift safeguard, introduce
+an arbitrary warm-up delay, or compensate waveform data until controlled
+evidence establishes a waveform-agnostic correction.
